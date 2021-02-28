@@ -4,8 +4,11 @@
 void sn_init(void);
 void sn_fillbuf(int16_t *buffer, int len);
 void sn_write(uint8_t data);
+#ifndef NO_USE_SAVE_STATE
 void sn_savestate(FILE *f);
 void sn_loadstate(FILE *f);
+#endif
+void sn_setvolume(uint8_t vol);
 
 extern uint8_t sn_freqhi[4],sn_freqlo[4];
 extern uint8_t sn_vol[4];

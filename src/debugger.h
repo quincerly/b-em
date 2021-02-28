@@ -1,6 +1,7 @@
 #ifndef __INC_DEBUGGER_H
 #define __INC_DEBUGGER_H
 
+#ifndef NO_USE_DEBUGGER
 extern void debug_start(void);
 extern void debug_kill(void);
 extern void debug_end(void);
@@ -11,5 +12,6 @@ extern int readc[65536], writec[65536], fetchc[65536];
 
 extern int debug_core,debug_tube,debug_step;
 
+#endif
 #endif
 

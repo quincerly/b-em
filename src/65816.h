@@ -16,6 +16,8 @@ void w65816_reset(void);
 void w65816_exec(void);
 void w65816_close(void);
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tube65816_cpu_debug;
+#endif
 
 #endif

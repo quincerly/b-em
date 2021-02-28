@@ -1,523 +1,174 @@
-# B-Em
+# Overview
 
-Introduction
-============
+This README is specific to the "pico" fork of b-em. See [here](README_b-em.md) for the original b-em readme.
 
-B-em is an emulator for various models of BBC Microcomputer as made
-by Acorn Computers in the 1980s along with a selection of 2nd
-processors.  It is supported for Win32 and Linux/UNIX but may also work
-on other systems supported by the Allegro library.
+The sole reason for this project's existence was to get a BBC B/Master 128 emulator running on the Raspberry Pi Pico. It supports
+building on other platforms (particularly Pi) however that was not the initial intent, and the Pi version may be missing features you would like (since it has the same feature set as the Pico version). This may be addressed in the future, but is not high on my priority list at least, since most games can already be played.
 
-B-em is licensed under the GPL, see COPYING for more details.
+NOTE: AS OF RELEASE THIS IS IN A "WORKS-ON-MY-MACHINES" STATE... SO EXPECT BUILD ISSUES!
+# Running
 
-DEVELOPMENT
-===========
+## Keyboard Layout
 
-Development is active!  If you want to know how to work with us,
-then please make sure [you have a look at the SUBMITTING\_PATCHES.md
-file](SUBMITTING\_PATCHES.md)
+Keys are layed out muchly the same as on a BBC Micro Keyboard; i.e. SHIFT-2 is `"`, SHIFT-' (next to Enter) `s '*`.
 
-TODO File
-=========
+Function keys are one off; i.e. F1 = `F0`, F2 = `F1` etc.
 
-A [TODO.md](TODO.md) file exists, with ideas for future functionality
-for future versions of B-em.
+F12 = `BREAK`
 
-Contact
-=======
+### Menu (for "Pico" versions i.e. RP2040, Pi etc)
 
-B-em is maintained by a group of volunteers -- please [enquire over
-on the stardot forums](http://www.stardot.org.uk/forums) for more details.
+F11, F15, LEFT_GUI, RIGHT_GUI = show/hide emulator menu.
 
-# Compiling
-## Linux
+When the menu is shown, use up/down arrows to move from option to option and left/right arrows to change selection. 
+Some options take immediate effect, others will flash meaning there is a change pending. Hit Enter to confirm, or Escape to cancel the pending change. (note you cannot use up/down arrows until you Enter/Escape if you have a pending change). Note Escape from the menu level hides the menu.
 
-You will need the following libraries:
+## RP2040 Version
 
-* Allegro 5.2 or later
-* Zlib
+All discs are embedded within the binary; see [Embedding Discs](#Embedding-Discs) for instructions.
 
-Linux distros which include Allegro 5.2 at the time of writing include:
+By default the emulator does not use USB host mode which would allow connecting a keyboard. Instead you should use
+[sdl_event_forwarder](https://github.com/kilograham/sdl_event_forwarder) to send events from your host PC over UART.
+The UART RX pin for receiving data is 21 by default.
 
-* Arch
-* Debian Stable (stretch)
-* Ubuntu 17.10 (Artful Aardvark)
+Note (Feb 28 2021) , I just tried, and host mode USB is currently panic-ing, so that is not an option atm.
 
-Allegro 5.2 packages for Ubuntu 16.04 LTS can be had from
-[Launchpad](https://launchpad.net/~allegro/+archive/ubuntu/5.2)
+## Pi (or Linux) version
 
-### Released version
+Discs are still embedded within the binary; see [Embedding Discs](#Embedding-Discs) for instructions, however you can also
+pass a disc via command line via `-disc path/to/disc`. Only .SSD and .DSD are supported.
 
-Open a terminal window, navigate to the B-em directory then enter:
+# Building
 
+## RP2040 Version
+
+This should work on Linux and Mac (and possibly Windows; I haven't tried)
+
+You need the Pico SDK: https://github.com/raspberrypi/pico-sdk
+You need the Pico Extras: https://github.com/raspberrypi/pico-extras (put it next to your pico-sdk directory)
+
+You also need to be setup to build with the Pico SDK (i.e. arm compiler etc).
+
+To build:
 ```
-./configure && make
-```
-
-### From Git Sources
-
-```
-./autogen.sh && ./configure && make
+mkdir pico_build
+cd pico_build
+cmake -DPICO_SDK_PATH=path/to/pico-sdk -DPICO_BOARD=vgaboard ..
+make -j4
 ```
 
-### Notes
+Note you might need `-DPICO_TOOLCHAIN_PATH=path/to/arm-gcc-install` also.
 
-* B-Em looks for its config file at $XDG_CONFIGID_RI/b-em/b-em.cfg
-  or, if $XDG_CONFIG_DIR is not defined, at ~/.config/b-em.cfg
-* If a config file cannot be found in those locations it will pick
-  up a default config from where the package is installed or from
-  the build directory, if being run from there.  It will always be
-  saved back to $XDG_CONFIGID_RI/b-em/b-em.cfg or ~/.config/b-em.cfg
-* This same config dir is used for CMOS RAM images and hard disc images.
-* On Linux, the debugger expects to use the terminal window from
-  swhich you started b-em for input and output.  On Windows it opens
-  a console window for this purpose.
-* With the port to Allegro 5 all the video output modes are available
-  on both Win32 and Linux.
+Outputs are `src/pico/beeb` and `src/pico/master` along with higher clock rate versions (which may or may not work for you)
+`src/pico/beeb360` and `src/pico/master360`
 
-## Windows
+You would add `-DUSE_USB_KEYBOARD` to use USB keyboard, but as I say this is currently broken. Note that I will probably make a micro host USB hid library anyway, since TinyUSB tends to sleep at awkard times currently anyway which can interfere with video.
 
-You will need version 5.2.2.0 of Allegro from:
+## Pi Version
 
-https://github.com/liballeg/allegro5/releases/tag/5.2.2.0
+Right now only 32-bit OS is worth building for (you can make it build on 64 bit if you remove the check but it currently doesn't run as well as you'd expect/hope due to video driver issues amongst other things, which is why I disallowed it by default).
 
-Later versions have a bug which prevents the ticks in the menus from
-working correctly.  There is a choice of compilers but these
-instructions only cover MingW and assume you have this correctly
-installed.
+You should be on the latest Raspberry Pi OS with latest updates. Frankly, for your first attempt I recommend starting with a fresh SD card install. 
 
-Unpack/clone B-Em into a folder and unpack the Allegro5 into a parallel
-folder, i.e. so the allegro folder and the b-em folder have the same
-parent and then from within the b-em folder run makebem.bat
+YOU MUST NOT BE USING THE LEGACY VIDEO DRIVER. ALSO I RECOMMEND DISABLING THE COMPOSITOR (both of these are in 6. Advanced in `raspi-config`, and make sure to reboot after).
 
-### Notes
+You need the Pico SDK: https://github.com/raspberrypi/pico-sdk as this is nominally still a "Pico" build
+You need the Pico Extras: https://github.com/raspberrypi/pico-extras (put it next to your pico-sdk directory)
 
-* On Windows B-Em looks for resource files in the same directory as
-  the executable with the exception of b-em.cfg, the CMOS RAM image
-  file and hard discs which are stored in a b-em.exe folder within
-  your Windows roaming profile.
-
-Features
-========
-
-- Emulates Models A, B, B+, Master 128, Master 512, Master Turbo and
-  Master Compact
-- Also emulates ARM evaluation system on Master 128
-- Emulates 6502, 65816 and Z80 and 32016 tubes.
-- Cycle-accurate video emulation
-- All documented and undocumented 6502 instructions
-- 8271 Floppy Disc Controller emulated (double drive, double sided,
-  80 track, read/write)
-- 1770-based Floppy Disc Controllers from various manufacters emulated
-  including Acorn, Opus, Solidisk, Watford Electronics
-  (double drive, double sided, 80 track, read/write)
-- Supports following disc formats - .ssd, .dsd, .adf, .adl, .img, .fdi
-  and variants thereof for the non-Acorn DFSes.
-- Supports the following tape formats: .uef and .csw
-- Can run many protected disc and tape games.
-- SCSI and IDE hard disc emulation
-- Sound emulation, including sample playback
-- BeebSID emulation
-- Hybrid Music System emulating including Music 500o (synth),
-  Music 4000 (keyboard, emulated via MIDI) and Music 2000 (MIDI).
-- Lots of video tricks, such as overscan, raster splitting, rupture,
-  interlace, mid-line palette and mode splits, etc.
-- Video NuLA extended pallete ULA emulation.
-- Sideways RAM emulation
-- Joystick emulation
-- AMX Mouse emulation
-
-New Features
-============
-
-# New With V2.2
-
-- MOS 3.50 emulation
-- Fixed CRTC bug when programmed with stupid values (MOS 3.50 startup)
-- ADFS disc corruption bug fixed (Carlo Concari)
-- Fixed ACIA bug - Pro Boxing Simulator tape version now works
-- Fixed bug which created endless blank hard disc images
-- Printer port DAC emulation
-- AMX mouse emulation
-- Master 512 mouse now works properly
-- Master Compact joystick emulation
-- IDE emulation available in non-Master models
-- UI fixes (some from Carlo Concari)
-- Improvements to VIA emulation
-- PAL video filter
-- Bugfixes in ARM and 65816 coprocessors
-- Debugger fixes
-- Tidying up of code
-- Windows version can now build on MSVC as well as GCC
-
-# New Since Version 2.2
-
-##Features
-
-* Implement RTC for Master
-* Working 32016 co-processor (shared with PiTubeDirect)
-* Emulate a SCSI hard disk.
-* VDFS - selective access to host filesystem as a standard Acorn filing system.
-* Music 5000 emulation (from Beech, via Hoglet)
-* Music 4000 emulation via MIDI
-* Load ROMs into specific slots
-* Debugging on all current tube processors
-* Debugger "step over subroutine"
-* Debugger: optional refresh screen in single-step/when breakpoint hit.
-* Debugger: tracing instructions to a file
-* Video NuLa
-* Add ROMs to an existing model from anywhere on your PC via menu and
-  file picker.
-* Save state to a snapshot file for a machine running with Tube
-  processor (except 32016)
-* Emulate the external and internal 6502 tube processors with the
-  correct ROMs and speeds
-* Get the visualisation of memory access when debugging working
-  cross-platform
-* Cross-platform keyboard mapping
-* Cross-platform tape catalogue
-* Replace diverged Windows/Linux GUI with single GUI
-
-## Bug Fixes
-
-* potential crashes when loading tapes
-* CSW files now work on 64-bit Linux
-* Unix: Fix fullscreen handling
-* Add missing SBC zero page indirect X on tube 6502
-* Fix SBC overflow (V) in binary mode on main and tube 6502
-* Fix aparent error with carry flag in undocumented instructions.
-* i8271: fix emulation always reporting drive as ready
-* i8271: ensure spindown happens on disk fault and on closing a disk image.
-* 65816: Fix failure to remember 65816 is enabled
-* mouse: Fix not working Y direction in 80186 co-pro Gem.
-* 6502: fix BCD errors on both main and tube 6502 (but not 65C02)
-* 65c02: Added missing BIT zp,X (0x34) instruction
-* 65c02 core/tube: Correted NOP lengths
-* 65c02 core/tube: Fixed ZP wrapping issue with inditect addressing
-* 6502tube: implement Rockwell instructions RMB/SMB and BBR/BBS
-* debugging: fix disassembly of 6502 opcode 24, BIT zp
-* Fix 256 byte transfer over Tube hangs
-* video: fix loadstate/savestate inconsistency
-
-Default keyboard mapping
-========================
-
-|BBC key  | PC key |
-|---------|--------|
-| BREAK   |      f12|
-|  *:     |      @'|
-|  +;     |      :;|
-|  -=     |      -_|
-|  ^~     |      +=|
-|  f0     |      f0 (function keys are based on keycaps, not positioning)|
-|  3#     |       3|
-|  6&     |       6|
-|  7'     |       7|
-|  8(     |       8|
-|  9)     |       9|
-|  0      |       0|
-Shift lock - |    ALT|
-
-The PC key Page Up acts as a speedup key and Page Down as pause.
-
-GUI
-===
-
-The options are:
-
-## File
-
-| Option | Meaning |
-| ------ | ------- |
-| Hard reset | resets the emulator, clearing all memory. |
-| Load state | load a previously saved savestate. |
-| Save state | save current emulation status. |
-| Save Screenshot | save the current screen to a file |
-| Exit       | exit to OS. |
-
-## Edit
-
-| Option | Meaning |
-| ------ | ------- |
-| Paste via Keyboard | send the contents of the clipbaord as keystoked|
-| Printer to Clipboard | capture printer output and copy to clipboard|
-
-## Disc
-
-| Option | Meaning |
-| ------ | ------- |
-| Autoboot disc 0/2    | load a disc image into drives 0 and 2, and boot it.|
-| Load disc 0/2        | load a disc image into drives 0 and 2.|
-| Load disc 1/3        | load a disc image into drives 1 and 3.|
-| Eject disc 0/2       | removes disc image from drives 0 and 2.|
-| Eject disc 1/3       | removes disc image from drives 1 and 3.|
-| New disc 0/2  | creates a new DFS/ADFS disc and loads it into drives 0 and 2.|
-| New disc 1/3  | creates a new DFS/ADFS disc and loads it into drives 1 and 3.|
-| Write protect disc 0/2| toggles write protection on drives 0 and 2.|
-| Write protect disc 1/3| toggles write protection on drives 1 and 3.|
-| Default write protect | determines whether loaded discs are write protected by default|
-| IDE Hard disc | Enables emulation of an IDE hard disc |
-| SCSI Hard disc | Enables emulation of a SCSI hard disc |
-| Enable VDFS | Enable a subset of host OS files to be visible as an Acorn filing system|
-| Choose VDFS Root | Chose the directory on the host that is visible via VDFS|
-
-## Tape
-
-| Option | Meaning |
-| ------ | ------- |
-| Load tape | load a tape image.|
-| Eject tape | removes a tape image.|
-| Rewind tape | rewind the emulated tape.|
-| Show tape catalogue | shows the catalogue of the current tape image.|
-| Tape speed | select between normal and fast tape speed.|
-
-## ROMS
-
-This menu shows the contents of the Sideways ROM/RAM banks and enables
-these to be loaded with a different ROM, enabled as RAM or cleared.
-
-## Model
-
-This lists the models in alphabetical order and enabled the model being
-emulated to be changed.  Be aware this causes a reset.
-
-## Tube
-
-This lists the available second processors and enabled one to be chosen.
-The choice in this menu is overridden if the model picked in the model
-menu is always supplied with a 2nd processor, for example the Master
-512.  For models like this the bundled 2nd processor is always used.
-
-## Settings
-
-### Video
-
-#### Display Type
-
-| Option | Meaning |
-| ------ | ------- |
-| Line Doubling | stretch the BBC screen by doubling every line.|
-| Scanlines     | stretch the BBC screen by blanking every other line|
-| Interlaced    | emulate an interlaced display (useful for a handful of demos).  Allows high resolution mode 7. |
-| PAL	      | use PAL filter!
-| PAL interlaced | use PAL filter, with interlacing. Slow! Allows high resolution mode 7.|
-
-#### Borders
-
-| Option | Meaning |
-| ------ | ------- |
-| None | Remove all the black space around the image area.
-| Medium | borders intended to be attractive rather than accurate |
-| Full | The full borders as seen on an old TV |
-
-
-| Option | Meaning |
-| ------ | ------- |
-| Fullscreen | enters fullscreen mode. Use ALT-ENTER to return to windowed mode.|
-
-### Sound
-
-| Option | Meaning |
-| ------ | ------- |
-| Internal sound chip | enable output of the normal BBC sound chip. |
-| BeebSID | enable output of the SID emulation.|
-| Music 5000 | enable output from an emulated Music 5000 synth|
-| Printer Port DAC | enable output of 8-bit DAC connected to the printer port. |
-| Disc drive noise | enable output of the disc drive sounds. |
-| Tape noise | enable output of the cassette emulation. |
-| Internal sound filter | enable bandpass filtering of sound. Reproduces the poor quality of the internal speaker. |
-| Internal waveform | choose between several waveforms for the normal BBC sound chip.  Square wave is the original. |
-
-### reSID configuration
-
-| Option | Meaning |
-| ------ | ------- |
-| Model | choose between many different models of SID. Many tunes sound quite different depending on the model chosen. |
-| Simple method | Choose between interpolation and resampling.  Resampling is in theory higher quality, but I can't tell the difference. |
-| Disc drive type | choose between sound from 5.25" drive or 3.5" drive. |
-| Disc drive volume | set the relative volume of the disc drive noise.|
-
-## Keyboard
-
-| Option | Meaning |
-| ------ |-------- |
-| Redefine keys | redefine keyboard setup.  Map CAPS/CTRL to A/S - remaps those 2 keys. Useful for games where CAPS/CTRL are left/right. |
-
-## Mouse
-
-| Option | Meaning |
-| ------ |-------- |
-| AMX mouse | enables AMX mouse emulation. |
-
-## Speed
-
-Choose an soeed relative to a real model of that type.
-
-## Debug
-
-| Option | Meaning |
-| ------ | ------- |
-| Debugger | Enters debugger for debugging the main 6502. Type '?' to get list of commands. |
-| Debug Tube | Enters debugger for debugging the current 2nd processor. |
-| Break | break into debugger.|
-
-
-Command Line Options
-====================
-
+You need the following packages installed:
 ```
-b-em [discimage|tapeimage|snapshot] [-u name.uef] [-mx] [-tx] [-i] [-c] [-fx]
+sudo apt install build-essential cmake libdrm-dev libx11-xcb-dev libxcb-dri3-dev libepoxy-dev ruby libasound2-dev
 ```
 
-`discimage` name.ssd/dsd/adf/adl/img etc.
-`tapeimage` name.uef/csw
-`snapshote` name.snp (previously saved snapshot)
-`-u` name.uef - load UEF image name.uef
-
-`-mx` - model to emulate, where x is
-
+To build:
 ```
-0 - BBC A with OS 0.1
-1 - BBC B with OS 0.1
-2 - BBC A
-3 - BBC B with 8271 FDC
-4 - BBC B with 8271 FDC + loads of sideways RAM
-5 - BBC B with 1770 FDC + loads of sideways RAM
-6 - BBC B US with 8271 FDC
-7 - BBC B German with 8271 FDC
-8 - B+ 64K
-9 - B+ 128K
-10 - Master 128 w/ MOS 3.20
-11 - Master 512
-12 - Master Turbo
-13 - Master Compact
-14 - ARM Evaluation System
-15 - Master 128 w/ MOS 3.50
-16 - BBC B with no FDC + loads of sideways RAM
-17 - BBC B w/Solidisk 1770 FDC
-18 - BBC B w/Opus 1770 FDC
-19 - BBC B w/Watford 1770 FDC
-20 - BBC B w/65C02, Acorn 1770
-21 - BBC B with 65C02, no FDC
-
+mkdir pi_build
+cd pi_build
+cmake -DPICO_SDK_PATH=path/to/pico-sdk -DPI_BUILD=1 -DPICO_PLATFORM=host -DDRM_PRIME=1 -DX_GUI=1 ..
+make -j4
 ```
 
-`-tx` - enable tube, where x is:
+Outputs are `src/pico/xbeeb` and `src/pico/xmaster`.
 
+You can omit DRM_PRIME to build without that, but it isn't gonna help your frame rate.
+
+Note the dependency on the Pico SDK could theoretically be removed, but it wasn't high on my priority list as it would have been 
+a bunch of work making a whole separate abstraction for no benefit to my cause!
+
+## Pi version on other Linuxes
+
+You can run the Pi Build on other desktop Linuxes, omitting `-DDRM_PRIME=1` if your driver doesn't support DRM_PRIME/DRI3. It will use the slower C CPU emulation, but that shouldn't be a problem on any recent desktop.
+
+## Regular B-em versions
+
+This should work on Linux and macOS (and possibly Windows; I haven't tried)
+
+You need allegro-dev installed. This is quite a hurdle on Raspberry Pi OS. If you have that, you can just do
+
+```c
+mkdir build
+cd build
+cmake ..
+make -j4
 ```
-0 - 6502 (internal)
-1 - ARM (Master only)
-2 - Z80
-3 - 80186 (Master only)
-4 - 65816 (if ROMs available)
-5 - 32016
-6 - 6502 (external)
+
+You get:
+* *b-em* - regular b-em
+* *b-em-reduced* - b-em with similar stuff cut out as for the _Pico_ style build
+* *b-em-reduced-thumb-cpu* - same as `b-em-reduced` but using the CPU from the src/thumb-cpu directory (mostly for comparative testing)
+
+## "Host" Pico Build
+
+This will compile the Pico version for `PICO_PLATFORM=host` using the `pico-host-sdl` project to simulate Pico audio and video output using SDL2
+
+This should work on Linux and Mac, and on a Pi 4... it is gonna be a bit slow on older Pis (remember we're simulating bits of the the RP2040 SDK emulating a Beeb).
+
+
+You need the Pico SDK: https://github.com/raspberrypi/pico-sdk
+You need the Pico Extras: https://github.com/raspberrypi/pico-extras (put it next to your pico-sdk directory)
+You need the Pico Host SDL: https://github.com/raspberrypi/pico-host-sdl (put it next to your pico-sdk directory)
+
+You also need this on Linux/macOS (note use `brew install` for macOS)
+```
+sudo apt install libsdl2-dev libsdl2-image-dev
 ```
 
-`-i` - enable interlace mode (only useful on a couple of demos)
+To build:
+```
+mkdir host_build
+cd host_build
+cmake -DPICO_SDK_PATH=path/to/pico-sdk -DPICO_PLATFORM=host -DPICO_SDK_PRE_LIST_DIRS=path/to/pico-host-sdl ..
+make -j4
+```
 
-`-c` - enables scanlines
+Outputs are `src/pico/beeb` and `src/pico/master` along with higher clock rate versions (which may or may not work for you)
+`src/pico/beeb360` and `src/pico/master360`
 
-`-fx` - set frameskip to x (1-9, 1=no skip)
+## Embedding Discs
 
-`-fasttape` - speeds up tape access
+The build will embed discs based on the contents of [beeb_discs.txt](src/pico/discs/beeb_discs.txt) and [master_discs.txt](src/pico/discs/master_discs.txt). If you look at those files, you'll see:
 
+* Some terse documentation
+* That they each contain some default images
+* That by default they are set up to use the contents of `beeb_discs_user.txt` and `master_discs_user.txt` from the same directory if those are present. This makes it easy for you to setup your own discs without changing the files checked into git.
 
-IDE Hard Discs
-==============
+If you want further control you can also set the CMake variable `OVERRIDE_DISC_FILE_<exe>` to the path of the discs file for that exe; e.g. for `xbeeb` it woudl be `OVERRIDE_DISC_FILE_xbeeb` (note i haven't actually tested this so lmk!)
 
-To initialise a hard disc, use the included HDINIT program. Press 'I' to investigate the drive - this will
-set up the default parameters for a 50 mb drive. If you want a different size press 'Z' and enter the desired
-size - it does not matter that this does not match the size given in the emulated hardware.
+Note: Only .SSD and .DSD are supported.
 
-Then press 'F' to format, and follow the prompts.
+## Technical Details
 
+See [here](src/pico/TECHNICAL.md) for technical details of the Pico port.
 
-Master 512
-==========
+## Future Plans
 
-Master 512 includes mouse emulation. This is used by trapping the mouse in the emulator window - click in the
-window to capture it, and press CTRL + END to release.
+* Fix cycle accuracy issues... this wasn't my highest priority; and having someone's help who knows the details more would likely help.
 
-All disc images used by the Master 512 should have the .img extension - the type is determined by size. Both
-640k and 800k discs are supported, as well as DOS standard 360k and 720k.
+### RP2040 version
 
-You can use the IDE hard disc emulation with this, run HDISK.CMD in DOS-Plus, then HDINSTAL.BAT. Go make a cup
-of tea while doing this, it takes _forever_! HDISK.CMD will create a file 'DRIVE_C' in ADFS so you will need
-to format the hard disc using ADFS first.
-
-
-65816 coprocessor
-=================
-
-The ROMs for this coprocessor are not included with the emulator. You will need to acquire the file
-ReCo6502ROM_816 and place it in roms\tube.
-
-The 65816 runs at 16mhz, regardless of what the firmware is set to.
-
-
-Hardware emulated
-=================
-
-| Processor | Meaning |
-| --------- | ------- |
-| The 6502 processor | All instructions should be emulated. Attempts to be cycle perfect. 65C02 is emulated for Master 128 mode. |
-| The 65C12 tube    | As a parasite processor.|
-| The 65816 tube    | As a parasite processor. Emulator from Snem. |
-| The Z80 tube      | As a parasite processor. Probably a few bugs. Emulator from ZX82. |
-| The ARM processor | As a parasite processor for Master 128 only. Emulator from Arculator. |
-| The 80186 tube    | As a parasite processor for Master 512 only. Emulator from PCem. |
-| The 6845 CRTC     | Cycle-exact emulation. Runs everything I've tried, with all effects working. |
-| The Video ULA     | Cycle-exact emulation, though I think palette changes are a cycle off? Might be a delay in the real chip. |
-| The System VIA    | Keyboard and sound emulated. Also CMOS on Master-based models.|
-| The User VIA      | Emulated.|
-| 8271 FDC          | Double disc, double sided, 40/80 tracks, read/write. With authentic noise. Supports read-only access of protected FDI images.|
-| 1770 FDC          | Double disc, double sided, 40/80 tracks, read/write. With authentic noise. Supports read-only access of protected FDI images.|
-| IDE hard disc	    | Emulates 2 discs. Emulation from Arculator.|
-| SCSI hard disc	| Emulates 4 discs. Emulation from BeebEm.|
-| Sound             | All channels emulated, with sample support and some undocumented behaviour (Crazee Rider).  With optional bandpass filter.|
-| BeebSID |  Emulated using resid-fp, so should be pretty accurate. Is only emulated when accessed, to reduce CPU load.|
-| ADC               | Real joystick emulation, supporting both joysticks.|
-| 6850 ACIA         | Emulated for cassettes. Read only.|
-| Serial ULA        | Emulated.|
-| Music 5000        | Hybrid synth emulated.  Emulation from Beech|
-| Music 4000        | Hybrid music keyboard.  Emulated via MIDI,  Emulation original to B-Em|
-| Music 2000        | Hybrid MIDI I/F.  Connects to host MIDI,  Emulation original to B-Em|
-
-
-Hardware NOT emulated
-=====================
-
-* Serial Port
-* Econet
-
-Thanks
-======
-
-* Sarah Walker for B-Em up to V2.2
-* David Gilbert for writing Beebem and distributing the sources with it
-* James Fidell for writing Xbeeb and distributing the sources with it
-* Tom Seddon for updating Model B, indirectly motivating me to do v0.6, and for
-  identifying the Empire Strikes Back bug.
-* Ken Lowe for assistance with the Level 9 adventures.
-* Rebecca Gellman for her help with a few things (hardware-related).
-* Thomas Harte for some UEF code - I wrote my own in the end - and for the
-  OS X port.
-* Dave Moore for making and hosting the B-em site
-* Rich Talbot-Watkins and Peter Edwards (also Dave Moore) for testing
-* Robert Schmidt for The BBC Lives!
-* DJ Delorie for DJGPP
-* Shawn Hargreaves for Allegro
-
-Acorn for making the BBC in the first place:
-
-David Allen,Bob Austin,Ram Banerjee,Paul Bond,Allen Boothroyd,Cambridge,
-Cleartone,John Coll,John Cox,Andy Cripps,Chris Curry,6502 designers,
-Jeremy Dion,Tim Dobson,Joe Dunn,Paul Farrell,Ferranti,Steve Furber,Jon Gibbons,
-Andrew Gordon,Lawrence Hardwick,Dylan Harris,Hermann Hauser,Hitachi,
-Andy Hopper,ICL,Martin Jackson,Brian Jones,Chris Jordan,David King,
-David Kitson,Paul Kriwaczek,Computer Laboratory,Peter Miller,Arthur Norman,
-Glyn Phillips,Mike Prees,John Radcliffe,Wilberforce Road,Peter Robinson,
-Richard Russell,Kim Spence-Jones,Graham Tebby,Jon Thackray,Chris Turner,
-Adrian Warner,Roger Wilson and Alan Wright for contributing to the development
-of the BBC Computer (among others too numerous to mention)
+* USB keyboard etc. support
+* I'd like to drive a real monitor using the beeb CRTC timings (probably would have done this if i had a monitor to test with - anybody? :-))
+* Use a second pico as a TUBE/SPI adapter (either direction)
+* Clearly serial, parallel and ADC should function correctly with pin outs! (perhaps with a GPIO extender for parallel)
+* Tape support (clearly need to be able to hook up MP3 player or real tape deck!)
+* Other real hardware (suggestions welcome)

@@ -17,23 +17,6 @@ uint8_t lpt_dac;
 ALLEGRO_USTR *prt_clip_str;
 FILE *prt_fp;
 
-void uservia_set_ca1(int level)
-{
-        via_set_ca1(&uservia, level);
-}
-void uservia_set_ca2(int level)
-{
-        via_set_ca2(&uservia, level);
-}
-void uservia_set_cb1(int level)
-{
-        via_set_cb1(&uservia, level);
-}
-void uservia_set_cb2(int level)
-{
-        via_set_cb2(&uservia, level);
-}
-
 void uservia_write_portA(uint8_t val)
 {
     if (prt_clip_str || prt_fp) {
@@ -72,23 +55,21 @@ uint8_t uservia_read_portA()
 
 uint8_t uservia_read_portB()
 {
+#ifndef NO_USE_MOUSE
     if (curtube == 3 || mouse_amx)
         return mouse_portb;
+#else
+    if (curtube == 3) return 0xff;
+#endif
+#ifndef NO_USE_JOYSTICK
     if (compactcmos)
         return compact_joystick_read();
+#endif
+#ifndef NO_USE_MUSIC5000
     if (sound_music5000)
         return music4000_read();
+#endif
     return 0xff; /*User port - nothing emulated*/
-}
-
-void uservia_write(uint16_t addr, uint8_t val)
-{
-    via_write(&uservia, addr, val);
-}
-
-uint8_t uservia_read(uint16_t addr)
-{
-    return via_read(&uservia, addr);
 }
 
 void uservia_reset()
@@ -109,10 +90,11 @@ void uservia_reset()
 
 void dumpuservia()
 {
-        log_debug("T1 = %04X %04X T2 = %04X %04X\n",uservia.t1c,uservia.t1l,uservia.t2c,uservia.t2l);
+        log_debug("T1 = %04X %04X T2 = %04X %04X\n",via_get_t1c(&uservia),(int)uservia.t1l,via_get_t2c(&uservia),(int)uservia.t2l);
         log_debug("%02X %02X  %02X %02X\n",uservia.ifr,uservia.ier,uservia.pcr,uservia.acr);
 }
 
+#ifndef NO_USE_SAVE_STATE
 void uservia_savestate(FILE *f)
 {
         via_savestate(&uservia, f);
@@ -122,3 +104,4 @@ void uservia_loadstate(FILE *f)
 {
         via_loadstate(&uservia, f);
 }
+#endif

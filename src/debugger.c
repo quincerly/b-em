@@ -232,6 +232,7 @@ static void enable_core_debug(void)
     core6502_cpu_debug.debug_enable(1);
 }
 
+#ifndef NO_USE_TUBE
 static void enable_tube_debug(void)
 {
     if (curtube != -1)
@@ -243,6 +244,7 @@ static void enable_tube_debug(void)
         tubes[curtube].debug->debug_enable(1);
     }
 }
+#endif
 
 static void disable_core_debug(void)
 {
@@ -253,6 +255,7 @@ static void disable_core_debug(void)
     debug_cons_close();
 }
 
+#ifndef NO_USE_TUBE
 static void disable_tube_debug(void)
 {
     if (curtube != -1)
@@ -263,19 +266,24 @@ static void disable_tube_debug(void)
         debug_cons_close();
     }
 }
+#endif
 
 void debug_start(void)
 {
     if (debug_core)
         enable_core_debug();
+#ifndef NO_USE_TUBE
     if (debug_tube)
         enable_tube_debug();
+#endif
 }
 
 void debug_end(void)
 {
+#ifndef NO_USE_TUBE
     if (debug_tube)
         disable_tube_debug();
+#endif
     if (debug_core)
         disable_core_debug();
 }
@@ -288,6 +296,7 @@ void debug_toggle_core(void)
         enable_core_debug();
 }
 
+#ifndef NO_USE_TUBE
 void debug_toggle_tube(void)
 {
     if (debug_tube)
@@ -295,6 +304,7 @@ void debug_toggle_tube(void)
     else
         enable_tube_debug();
 }
+#endif
 
 int readc[65536], writec[65536], fetchc[65536];
 

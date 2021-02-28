@@ -248,6 +248,7 @@ static unsigned char *save_regset(unsigned char *ptr, uint32_t *regs)
     return ptr;
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void arm_savestate(ZFILE *zfp)
 {
     unsigned char bytes[332], *ptr;
@@ -298,8 +299,9 @@ static void arm_loadstate(ZFILE *zfp)
     savestate_zread(zfp, armram, ARM_RAM_SIZE);
     savestate_zread(zfp, armrom, ARM_ROM_SIZE);
 }
+#endif
 
-int endtimeslice=0;
+static int endtimeslice=0;
 
 static inline uint32_t readarmfl(uint32_t addr)
 {
@@ -312,7 +314,9 @@ static inline uint32_t readarmfl(uint32_t addr)
         exit(-1);*/
 }
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tubearm_cpu_debug;
+#endif
 
 static inline uint32_t do_readarml(uint32_t a)
 {
@@ -325,8 +329,10 @@ static uint32_t readarml(uint32_t a)
 {
     uint32_t v = do_readarml(a);
 
+#ifndef NO_USE_DEBUGGER
     if (arm_debug_enabled)
         debug_memread(&tubearm_cpu_debug, a, v, 4);
+#endif
     return v;
 }
 
@@ -348,8 +354,10 @@ static inline uint8_t do_readarmb(uint32_t addr)
 static uint8_t readarmb(uint32_t addr)
 {
     uint8_t v = do_readarmb(addr);
+#ifndef NO_USE_DEBUGGER
     if (arm_debug_enabled)
         debug_memread(&tubearm_cpu_debug, addr, v, 1);
+#endif
     return v;
 }
 
@@ -374,15 +382,19 @@ static inline void do_writearmb(uint32_t addr, uint8_t val)
 
 static void writearmb(uint32_t addr, uint8_t val)
 {
+#ifndef NO_USE_DEBUGGER
     if (arm_debug_enabled)
         debug_memwrite(&tubearm_cpu_debug, addr, val, 1);
+#endif
     do_writearmb(addr, val);
 }
 
 static void writearml(uint32_t addr, uint32_t val)
 {
-        if (arm_debug_enabled)
+#ifndef NO_USE_DEBUGGER
+    if (arm_debug_enabled)
                 debug_memwrite(&tubearm_cpu_debug, addr, val, 4);
+#endif
         if (addr<0x400000)
         {
                 armram[addr>>2]=val;
@@ -393,6 +405,8 @@ static void writearml(uint32_t addr, uint32_t val)
         dumparmregs();
         exit(-1);*/
 }
+
+#ifndef NO_USE_DEBUGGER
 
 /*****************************************************
  * CPU Debug Interface
@@ -640,6 +654,8 @@ cpu_debug_t tubearm_cpu_debug = {
    .trap_names     = arm_trap_names
 };
 
+#endif
+
 bool arm_init(void *rom)
 {
     if (!armram) {
@@ -665,8 +681,10 @@ bool arm_init(void *rom)
     tube_readmem = readarmb;
     tube_writemem = writearmb;
     tube_exec  = arm_exec;
+#ifndef NO_USE_SAVE_STATE
     tube_proc_savestate = arm_savestate;
     tube_proc_loadstate = arm_loadstate;
+#endif
     arm_reset();
     return true;
 }
@@ -918,8 +936,10 @@ void arm_exec()
                 opcode=opcode2;
                 opcode2=opcode3;
                 opcode3=readarml(PC);
+#ifndef NO_USE_DEBUGGER
                 if (arm_debug_enabled)
                     debug_preexec(&tubearm_cpu_debug, PC);
+#endif
                 if (flaglookup[opcode>>28][armregs[15]>>28])
                         {
                                 switch ((opcode>>20)&0xFF)

@@ -131,6 +131,7 @@ static inline void unpack_flags_em(uint8_t flags)
     p.n = flags & 0x80;
 }
 
+#ifndef NO_USE_DEBUGGER
 static uint32_t dbg_reg_get(int which)
 {
     switch (which) {
@@ -224,9 +225,13 @@ static void dbg_reg_parse(int which, const char *str)
     uint32_t value = strtol(str, NULL, 16);
     dbg_reg_set(which, value);
 }
+#endif
 
 static uint32_t do_readmem65816(uint32_t addr);
 static void do_writemem65816(uint32_t addr, uint32_t val);
+
+#ifndef NO_USE_DEBUGGER
+
 static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize);
 
 static uint32_t dbg_get_instr_addr(void)
@@ -252,6 +257,7 @@ static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize)
 {
     return dbg6502_disassemble(&tube65816_cpu_debug, addr, buf, bufsize, W65816);
 }
+#endif
 
 static uint32_t do_readmem65816(uint32_t a)
 {
@@ -274,8 +280,10 @@ static uint32_t do_readmem65816(uint32_t a)
 static uint8_t readmem65816(uint32_t addr)
 {
     uint32_t value = do_readmem65816(addr);
+#ifndef NO_USE_DEBUGGER
     if (dbg_w65816)
         debug_memread(&tube65816_cpu_debug, addr, value, 1);
+#endif
     return value;
 }
 
@@ -285,12 +293,14 @@ static uint16_t readmemw65816(uint32_t a)
 
     a &= w65816mask;
     value = do_readmem65816(a) | (do_readmem65816(a + 1) << 8);
+#ifndef NO_USE_DEBUGGER
     if (dbg_w65816)
         debug_memread(&tube65816_cpu_debug, a, value, 2);
+#endif
     return value;
 }
 
-int endtimeslice;
+static int endtimeslice;
 
 static void do_writemem65816(uint32_t a, uint32_t v)
 {
@@ -339,15 +349,19 @@ static void do_writemem65816(uint32_t a, uint32_t v)
 
 static void writemem65816(uint32_t addr, uint8_t val)
 {
+#ifndef NO_USE_DEBUGGER
     if (dbg_w65816)
         debug_memwrite(&tube65816_cpu_debug, addr, val, 1);
+#endif
     do_writemem65816(addr, val);
 }
 
 static void writememw65816(uint32_t a, uint16_t v)
 {
+#ifndef NO_USE_DEBUGGER
     if (dbg_w65816)
         debug_memwrite(&tube65816_cpu_debug, a, v, 2);
+#endif
     a &= w65816mask;
     do_writemem65816(a, v);
     do_writemem65816(a + 1, v >> 8);
@@ -5613,6 +5627,7 @@ static inline unsigned char *save_reg(unsigned char *ptr, reg * rp)
     return ptr;
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void w65816_savestate(ZFILE * zfp)
 {
     unsigned char bytes[38], *ptr;
@@ -5675,6 +5690,7 @@ static void w65816_loadstate(ZFILE * zfp)
     savestate_zread(zfp, w65816ram, W65816_RAM_SIZE);
     savestate_zread(zfp, w65816rom, W65816_ROM_SIZE);
 }
+#endif
 
 bool w65816_init(void *rom)
 {
@@ -5690,8 +5706,10 @@ bool w65816_init(void *rom)
     tube_readmem = readmem65816;
     tube_writemem = writemem65816;
     tube_exec  = w65816_exec;
+#ifndef NO_USE_SAVE_STATE
     tube_proc_savestate = w65816_savestate;
     tube_proc_loadstate = w65816_loadstate;
+#endif
     w65816_reset();
     return true;
 }
@@ -5772,8 +5790,10 @@ void w65816_exec(void)
     while (tubecycles > 0) {
         ia = pbr | pc;
         toldpc = pc++;
+#ifndef NO_USE_DEBUGGER
         if (dbg_w65816)
             debug_preexec(&tube65816_cpu_debug, ia);
+#endif
         opcode = readmem(ia);
         modeptr[opcode]();
         wins++;

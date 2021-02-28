@@ -1,9 +1,12 @@
 #ifndef __INC_VIDEO_RENDER_H
 #define __INC_VIDEO_RENDER_H
 
+// disabling here to catch all uses
+#ifndef PICO_BUILD
 extern ALLEGRO_BITMAP *b, *b16, *b32;
 extern ALLEGRO_LOCKED_REGION *region;
 extern ALLEGRO_COLOR border_col;
+#endif
 
 #define BORDER_NONE_X_START_GRA 336
 #define BORDER_NONE_X_END_GRA   976
@@ -43,7 +46,10 @@ extern enum vid_disptype {
     VDT_INTERLACE,
     VDT_SCANLINES,
     VDT_LINEDOUBLE,
-} vid_dtype_user, vid_dtype_intern;
+} vid_dtype_user;
+#ifndef PICO_BUILD
+extern enum vid_disptype vid_dtype_intern;
+#endif
 
 extern bool vid_pal;
 extern int vid_fskipmax, vid_fullborders;

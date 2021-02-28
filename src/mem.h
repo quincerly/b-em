@@ -14,6 +14,9 @@ typedef struct {
     uint8_t alloc;    // name/path are from malloc(3)
     char *name;       // short name for the loaded ROM.
     char *path;       // full filestystem path for the loaded ROM.
+#ifdef NO_USE_RAM_ROMS
+    const uint8_t *data;
+#endif
 } rom_slot_t;
 
 extern void mem_romsetup_os01(void);
@@ -35,14 +38,36 @@ void mem_init(void);
 void mem_reset(void);
 void mem_close(void);
 
+#ifndef NO_USE_SAVE_STATE
 void mem_savezlib(ZFILE *zfp);
 void mem_loadzlib(ZFILE *zfp);
 void mem_loadstate(FILE *f);
+#endif
 
 void mem_dump(void);
 
 extern uint8_t ram_fe30, ram_fe34;
-extern uint8_t *ram, *rom, *os;
+extern uint8_t *ram;
 extern rom_slot_t rom_slots[ROM_NSLOT];
 
+#ifndef NO_USE_RAM_ROMS
+extern uint8_t *os;
+static inline uint8_t* rom_slot_ptr(int slot) {
+    extern uint8_t *rom;
+    return rom + slot * ROM_SIZE;
+}
+#else
+extern const uint8_t *os;
+// read and write for non device so code can't mutate value and read it back
+extern uint8_t *g_garbage_read;
+extern uint8_t *g_garbage_write;
+static inline const uint8_t* rom_slot_ptr(int slot) {
+    const uint8_t *rc = rom_slots[slot].data;
+    if (!rc) {
+        rc = g_garbage_read;
+//        printf("Garbage for slot %d\n", slot);
+    }
+    return rc;
+}
+#endif
 #endif

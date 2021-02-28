@@ -9,7 +9,11 @@
 
 extern void log_open(void);
 extern void log_close(void);
+#if !PICO_ON_DEVICE
 extern void log_fatal(const char *fmt, ...) printflike;
+#else
+extern void __attribute__((noreturn)) log_fatal(const char *fmt, ...) printflike;
+#endif
 extern void log_error(const char *fmt, ...) printflike;
 extern void log_warn(const char *fmt, ...) printflike;
 extern void log_info(const char *fmt, ...) printflike;

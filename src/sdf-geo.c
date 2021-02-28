@@ -15,6 +15,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #include "logging.h"
 #include "sdf.h"
 
@@ -127,7 +128,7 @@ static void new_adfs(FILE *f, const struct sdf_geometry *geo)
 
     if (geo->sides != SDF_SIDES_SINGLE)
         nsect *= 2;
-    log_debug("sdf: sdf_prep_adfs, nsect=%d", nsect);
+    log_debug("sdf: sdf_prep_adfs, nsect=%d", (int)nsect);
     memset(sects, 0, sizeof sects);
     sects[0x000] = 7;
     sects[0x0fc] = nsect;
@@ -240,7 +241,7 @@ static int32_t read_size24(FILE *fp, long offset)
     if (fseek(fp, offset, SEEK_SET) == 0) {
         if (fread(bytes, sizeof bytes, 1, fp) == 1) {
             size = (bytes[2] << 16) | (bytes[1] << 8) | bytes[0];
-            log_debug("sdf: found ADFS total sectors as %u", size);
+            log_debug("sdf: found ADFS total sectors as %u", (int)size);
             return size;
         }
     }
@@ -276,7 +277,7 @@ static int32_t dfs_size(FILE *fp, long offset)
     if (fseek(fp, offset+0x100, SEEK_SET) >= 0) {
         if (fread(sect, sizeof sect, 1, fp) == 1) {
             dirsize = sect[5];
-            log_debug("sdf: DFS dirsize=%d bytes, %d entries", dirsize, dirsize / 8);
+            log_debug("sdf: DFS dirsize=%d bytes, %d entries", (int)dirsize, (int)(dirsize / 8));
             if (!(dirsize & 0x07) && dirsize <= (31 * 8)) {
                 sects = ((sect[6] & 0x07) << 8) | sect[7];
                 base = sect;
@@ -296,7 +297,7 @@ static int32_t dfs_size(FILE *fp, long offset)
                     }
                     cur_start = new_start;
                 }
-                log_debug("sdf: found DFS size as %d sectors", sects);
+                log_debug("sdf: found DFS size as %d sectors", (int)sects);
                 return sects;
             }
             else
@@ -305,8 +306,10 @@ static int32_t dfs_size(FILE *fp, long offset)
         else
             log_debug("sdf: unable to read");
     }
+#if !PICO_BUILD
     else
         log_debug("sdf: unable to seek: %s", strerror(errno));
+#endif
     return -1;
 }
 
@@ -325,7 +328,7 @@ static const struct sdf_geometry *find_geo_dfs(const char *fn, const char *ext, 
         else if (sects <= (80 * 18))
             geo = sdf_geo_tab + SDF_FMT_DFS_18S_SIN_80T;
         else {
-            log_warn("sdf: sector count too high (%u) for %s", sects, fn);
+            log_warn("sdf: sector count too high (%u) for %s", (int)sects, fn);
             return NULL;
         }
         track_bytes = geo->sectors_per_track * geo->sector_size;

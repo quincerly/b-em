@@ -9,6 +9,8 @@ void x86_reset(void);
 void x86_exec(void);
 void x86_close(void);
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tubex86_cpu_debug;
+#endif
 
 #endif

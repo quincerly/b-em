@@ -25,9 +25,14 @@ static void sysacia_tx_end(ACIA *acia) {
     fflush(stdout);
 }
 
+#ifdef NO_USE_TAPE
+void tape_receive(ACIA *acia, uint8_t byte) {}
+#endif
+#ifndef NO_USE_ACIA
 ACIA sysacia = {
     .set_params = sysvia_set_params,
     .rx_hook    = tape_receive,
     .tx_hook    = sysacia_tx_hook,
     .tx_end     = sysacia_tx_end
 };
+#endif

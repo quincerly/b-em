@@ -3,7 +3,13 @@
 #ifndef __INC_BBCTEXT_H
 #define __INC_BBCTEXT_H
 
-static uint8_t teletext_characters[96*60]={
+#ifdef PICO_BUULD
+#define pcio_const const
+#else
+#define pico_const
+#endif
+
+static pico_const uint8_t teletext_characters[96*60]={
   // 0x20 ' '
   0,0,0,0,0,0,
   0,0,0,0,0,0,
@@ -1065,7 +1071,7 @@ static uint8_t teletext_characters[96*60]={
 
 /* Graphics Character Set */
 
-static uint8_t teletext_graphics[96*60]={
+static pico_const uint8_t teletext_graphics[96*60]={
   // 0x20
   0,0,0,0,0,0,
   0,0,0,0,0,0,
@@ -1726,7 +1732,7 @@ static uint8_t teletext_graphics[96*60]={
   0,0,0,0,0,0,
   0,0,0,0,0,0,
   0,0,0,0,0,0
-, // 0x5c '½'
+, // 0x5c 'ï¿½'
   0,0,0,0,0,0,
   0,1,0,0,0,0,
   0,1,0,0,0,0,
@@ -2126,7 +2132,7 @@ static uint8_t teletext_graphics[96*60]={
 
 /* Separated Graphics Character Set */
 
-static uint8_t teletext_separated_graphics[96*60]={
+static pico_const uint8_t teletext_separated_graphics[96*60]={
   // Character ' ' (32)
   0,0,0,0,0,0,
   0,0,0,0,0,0,

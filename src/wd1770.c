@@ -1,5 +1,7 @@
-/*B-em v2.2 by Tom Walker
-  1770 FDC emulation*/
+/* B-em v2.2 by Tom Walker
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * 1770 FDC emulation*/
 #include <stdio.h>
 #include <stdlib.h>
 #include "b-em.h"
@@ -44,11 +46,10 @@ static int bytenum;
 
 void wd1770_reset()
 {
-    nmi = 0;
+    nmi_clr_all();
     wd1770.status = 0;
-    motorspin = 0;
     log_debug("wd1770: reset 1770");
-    fdc_time = 0;
+    set_fdc_time(0);
     if (fdc_type >= FDC_ACORN) {
         fdc_callback       = wd1770_callback;
         fdc_data           = wd1770_data;
@@ -59,7 +60,9 @@ void wd1770_reset()
         fdc_headercrcerror = wd1770_headercrcerror;
         fdc_writeprotect   = wd1770_writeprotect;
         fdc_getdata        = wd1770_getdata;
-        motorspin = 45000;
+        set_motorspin(45000);
+    } else {
+        set_motorspin(0);
     }
 }
 
@@ -67,8 +70,14 @@ void wd1770_spinup()
 {
     wd1770.status |= 0x80;
     if (!motoron) {
+        // todo put all this is a method - we reset disc_time to make comparing with hw_event easier
         motoron = 1;
-        motorspin = 0;
+#ifdef USE_HW_EVENT
+        hw_event_motor_base = get_hardware_timestamp();
+#else
+        disc_time = 16;
+#endif
+        set_motorspin(0);
         ddnoise_spinup();
     }
 }
@@ -84,13 +93,13 @@ void wd1770_spindown()
 
 void wd1770_setspindown()
 {
-    motorspin = 45000;
+    set_motorspin(45000);
 }
 
 static void short_spindown(void)
 {
-    motorspin = 15000;
-    fdc_time = 0;
+    set_motorspin(15000);
+    set_fdc_time(0);
 }
 
 #define track0 (wd1770.curtrack ? 0 : 4)
@@ -113,7 +122,7 @@ static void begin_write_sector(const char *variant)
     wd1770.status = 0x80 | 0x1;
     disc_writesector(curdrive, wd1770.sector, wd1770.track, wd1770.curside, wd1770.density);
     bytenum = 0;
-    nmi |= 2;
+    nmi_set_mask(2);
     wd1770.status |= 2;
     //Carlo Concari: wait for first data byte before starting sector write
     wd1770.written = 0;
@@ -124,7 +133,7 @@ static void write_1770(uint16_t addr, uint8_t val)
     switch (addr & 0x03)
     {
     case 0:
-        nmi &= ~1;
+        nmi_clr_mask(1);
         if (wd1770.status & 1 && (val >> 4) != 0xD) {
             log_debug("wd1770: command %02X rejected", val);
             return;
@@ -208,7 +217,7 @@ static void write_1770(uint16_t addr, uint8_t val)
             else
                 wd1770.status = 0x80 | 0x20 | track0;
             if (((val & 0xc) || (wd1770.command >> 4) == 0xB) && nmi_on_completion[fdc_type - FDC_ACORN])
-                nmi = 1;
+                nmi_set(1);
             wd1770_setspindown();
             break;
 
@@ -221,7 +230,7 @@ static void write_1770(uint16_t addr, uint8_t val)
         default:
             log_debug("wd1770: bad WD1770 command %02X",val);
             if (nmi_on_completion[fdc_type - FDC_ACORN])
-                nmi = 1;
+                nmi_set(1);
             wd1770.status = 0x90;
             short_spindown();
             break;
@@ -240,7 +249,7 @@ static void write_1770(uint16_t addr, uint8_t val)
         break;
 
     case 3: // Data register
-        nmi &= ~2;
+        nmi_clr_mask(2);
         wd1770.status &= ~2;
         wd1770.data = val;
         wd1770.written = 1;
@@ -301,6 +310,7 @@ static void write_ctrl_watford(uint8_t val)
 
 void wd1770_write(uint16_t addr, uint8_t val)
 {
+    disc_cycle_sync(curdrive);
     switch (fdc_type)
     {
     case FDC_NONE:
@@ -332,7 +342,7 @@ void wd1770_write(uint16_t addr, uint8_t val)
             write_1770(addr, val);
         break;
     case FDC_WATFORD:
-        log_debug("wd1770: write to watford WD1770 board: %04x=%02x, pc=%04x", addr, val, pc);
+        log_debug("wd1770: write to watford WD1770 board: %04x=%02x, pc=%04x", addr, val, get_pc());
         if (addr & 0x0004)
             write_1770(addr, val);
         else
@@ -348,7 +358,7 @@ static uint8_t read_1770(uint16_t addr)
     switch (addr & 0x03)
     {
     case 0: // Status register.
-        nmi &= ~1;
+        nmi_clr_mask(1);
         //log_debug("wd1770: status %02X", wd1770.status);
         return wd1770.status;
 
@@ -359,9 +369,9 @@ static uint8_t read_1770(uint16_t addr)
         return wd1770.sector;
 
     case 3: // Data register.
-        nmi &= ~2;
+        nmi_clr_mask(2);
         wd1770.status &= ~2;
-//        log_debug("wd1770: read data %02X %04X\n",wd1770.data,pc);
+        log_debug("wd1770: read data %02X %04X\n",wd1770.data,get_pc());
         return wd1770.data;
     }
     log_debug("wd1770: returning unmapped status");
@@ -370,6 +380,7 @@ static uint8_t read_1770(uint16_t addr)
 
 uint8_t wd1770_read(uint16_t addr)
 {
+    disc_cycle_sync(curdrive);
     switch (fdc_type)
     {
         case FDC_NONE:
@@ -401,7 +412,7 @@ uint8_t wd1770_read(uint16_t addr)
 void wd1770_callback()
 {
     log_debug("wd1770: fdc callback %02X",wd1770.command);
-    fdc_time = 0;
+    set_fdc_time(0);
     switch (wd1770.command >> 4)
     {
     case 0: /*Restore*/
@@ -419,14 +430,14 @@ void wd1770_callback()
             wd1770.status = 0x80 | track0;
         wd1770_setspindown();
         if (nmi_on_completion[fdc_type - FDC_ACORN])
-            nmi |= 1;
+            nmi_set_mask(1);
         break;
 
     case 8: /*Read sector*/
         wd1770.status = 0x80;
         wd1770_setspindown();
         if (nmi_on_completion[fdc_type - FDC_ACORN])
-            nmi |= 1;
+            nmi_set_mask(1);
         break;
 
     case 9:
@@ -436,14 +447,14 @@ void wd1770_callback()
         } else {
             log_debug("wd1770: multi-sector read, inter-sector gap");
             wd1770.in_gap = 1;
-            fdc_time = 5000;
+            set_fdc_time(5000);
         }
         break;
     case 0xA: /*Write sector*/
         wd1770.status = 0x80;
         wd1770_setspindown();
         if (nmi_on_completion[fdc_type - FDC_ACORN])
-            nmi |= 1;
+            nmi_set_mask(1);
         break;
 
     case 0xB:
@@ -453,7 +464,7 @@ void wd1770_callback()
         } else {
             log_debug("wd1770: multi-sector write, inter-sector gap");
             wd1770.in_gap = 1;
-            fdc_time = 5000;
+            set_fdc_time(5000);
         }
         break;
 
@@ -461,7 +472,7 @@ void wd1770_callback()
         wd1770.status = 0x80;
         wd1770_setspindown();
         if (nmi_on_completion[fdc_type - FDC_ACORN])
-            nmi |= 1;
+            nmi_set_mask(1);
         wd1770.sector = wd1770.track;
         break;
 
@@ -472,7 +483,7 @@ void wd1770_callback()
         wd1770.status = 0x80;
         wd1770_setspindown();
         if (nmi_on_completion[fdc_type - FDC_ACORN])
-            nmi |= 1;
+            nmi_set_mask(1);
         break;
     }
 }
@@ -482,20 +493,20 @@ void wd1770_data(uint8_t dat)
     if (wd1770.status & 0x01) {
         wd1770.data = dat;
         wd1770.status |= 2;
-        nmi |= 2;
+        nmi_set_mask(2);
     }
 }
 
 void wd1770_finishread()
 {
     log_debug("wd1770: data i/o finished");
-    fdc_time = 200;
+    set_fdc_time(200);
 }
 
 void wd1770_notfound()
 {
     log_debug("wd1770: not found");
-    nmi |= nmi_on_completion[fdc_type - FDC_ACORN];
+    nmi_set_mask(nmi_on_completion[fdc_type - FDC_ACORN]);
     wd1770.status = 0x90;
     short_spindown();
 }
@@ -503,7 +514,7 @@ void wd1770_notfound()
 void wd1770_datacrcerror()
 {
     log_debug("wd1770: data CRC error");
-    nmi = nmi_on_completion[fdc_type - FDC_ACORN];
+    nmi_set(nmi_on_completion[fdc_type - FDC_ACORN]);
     wd1770.status = 0x88;
     short_spindown();
 }
@@ -511,21 +522,21 @@ void wd1770_datacrcerror()
 void wd1770_headercrcerror()
 {
     log_debug("wd1770: header CRC error");
-    nmi = nmi_on_completion[fdc_type - FDC_ACORN];
+    nmi_set(nmi_on_completion[fdc_type - FDC_ACORN]);
     wd1770.status = 0x98;
     short_spindown();
 }
 
 int wd1770_getdata(int last)
 {
-    //log_debug("wd1770: disc get data");
+//    log_debug("wd1770: disc get data");
     if (!wd1770.written) {
         log_debug("wd1770: getdata: no data in register");
         return -1;
     }
     if (!last)
     {
-        nmi |= 2;
+        nmi_set_mask(2);
         wd1770.status |= 2;
     }
     wd1770.written = 0;
@@ -534,8 +545,8 @@ int wd1770_getdata(int last)
 
 void wd1770_writeprotect()
 {
-    fdc_time = 0;
-    nmi = nmi_on_completion[fdc_type - FDC_ACORN];
+    set_fdc_time(0);
+    nmi_set(nmi_on_completion[fdc_type - FDC_ACORN]);
     wd1770.status = 0xC0;
     wd1770_setspindown();
 }

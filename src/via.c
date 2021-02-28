@@ -1,3 +1,7 @@
+/*B-em v2.2 by Tom Walker
+  * Pico version (C) 2021 Graham Sanderson
+  *
+  * VIA  emulation*/
 #include "b-em.h"
 #include "6502.h"
 #include "via.h"
@@ -28,50 +32,149 @@
 
 #define TLIMIT -3
 
-static void via_updateIFR(VIA *v)
+static void __time_critical_func(via_updateIFR)(VIA *v)
 {
-        if ((v->ifr & 0x7F) & (v->ier & 0x7F))
+    // REMOVE DEBUGGING
+//
+//    extern int hc, vc;
+//    printf("IFR update %02x %d:%d %d\n", v->ifr, hc, vc, get_cpu_timestamp());
+
+    if ((v->ifr & 0x7F) & (v->ier & 0x7F))
         {
                 v->ifr |= 0x80;
-                interrupt |= v->intnum;
+                interrupt_set_mask(v->intnum);
         }
         else
         {
                 v->ifr &= ~0x80;
-                interrupt &= ~v->intnum;
+                interrupt_clr_mask(v->intnum);
         }
 }
 
+static void __time_critical_func(via_set_sr_count)(VIA *v, int count) {
+    v->sr_count = count;
+#ifdef USE_HW_EVENT
+    // todo we only support system clock rate writes, as this is all that is checked
+    //  in via_clock- easily fixed
+    if (count > 0 && (v->acr & 0x1c) == 0x18) {
+        v->sr_event.user_time = get_hardware_timestamp();
+        v->sr_event.target = v->sr_event.user_time + count;
+        upsert_hw_event(&v->sr_event);
+    } else {
+        remove_hw_event(&v->sr_event);
+    }
+#endif
+}
+
+
+static void __time_critical_func(via_set_t1c)(VIA *v, int cycles) {
+#ifndef USE_HW_EVENT
+    v->t1c = cycles;
+#else
+    v->timer1_event.target = get_hardware_timestamp() + cycles - TLIMIT + 1;
+    upsert_hw_event(&v->timer1_event);
+#endif
+}
+
+static void __time_critical_func(via_set_t2c)(VIA *v, int cycles) {
+#ifndef USE_HW_EVENT
+    v->t2c = cycles;
+#else
+    v->timer2_event.target = get_hardware_timestamp() + cycles - TLIMIT + 1;
+    upsert_hw_event(&v->timer2_event);
+#endif
+}
+
+int __time_critical_func(via_get_t1c)(VIA *v) {
+#ifndef USE_HW_EVENT
+    return v->t1c;
+#else
+    int t = (int)(v->timer1_event.target - get_hardware_timestamp() + TLIMIT - 1);
+    return t;
+#endif
+}
+
+int __time_critical_func(via_get_t2c)(VIA *v) {
+#ifndef USE_HW_EVENT
+    return v->t2c;
+#else
+    int t;
+    if (v->t2_stopped_at >= 0) {
+        t = v->t2_stopped_at;
+    } else {
+        t = (int) (v->timer2_event.target - get_hardware_timestamp() + TLIMIT - 1);
+    }
+    return t;
+#endif
+}
+
+static void __time_critical_func(t1_reached)(VIA *v) {
+    int t1c = via_get_t1c(v);
+//    printf("T1 REACHED AT %d\n", t1c);
+    assert (t1c < TLIMIT);
+    while (t1c < TLIMIT) {
+        t1c += v->t1l + 4;
+        via_set_t1c(v, t1c);
+    }
+    if (!v->t1hit) {
+        v->ifr |= INT_TIMER1;
+        via_updateIFR(v);
+        if (v->timer_expire1)
+            v->timer_expire1();
+        if (v->acr & 0x80) /*Output to PB7*/
+            v->t1pb7 ^= 0x80;
+    }
+    if (!(v->acr & 0x40))
+        v->t1hit = 1;
+}
+
+static void __time_critical_func(t2_reached)(VIA *v) {
+    if (!v->t2hit) {
+        v->ifr |= INT_TIMER2;
+        via_updateIFR(v);
+        v->t2hit=1;
+    }
+}
+
+#ifdef USE_HW_EVENT
+static bool __time_critical_func(t1_invoke)(struct hw_event *event) {
+    VIA *v = (VIA *)event->user_data;
+    t1_reached(v);
+    return false;
+}
+
+static bool __time_critical_func(t2_invoke)(struct hw_event *event) {
+    VIA *v = (VIA *)event->user_data;
+    t2_reached(v);
+    return false;
+}
+
+static bool __time_critical_func(sr_invoke)(struct hw_event *event) {
+    // todo untested
+    VIA *v = (VIA *)event->user_data;
+    via_shift(v, (int)(get_hardware_timestamp() - event->user_time));
+    return false;
+}
+
+#else
 void via_poll(VIA *v, int cycles)
 {
     v->t1c -= cycles;
     if (v->t1c < TLIMIT) {
-        while (v->t1c < TLIMIT)
-              v->t1c+=v->t1l+4;
-        if (!v->t1hit) {
-            v->ifr |= INT_TIMER1;
-            via_updateIFR(v);
-            if (v->timer_expire1)
-                v->timer_expire1();
-            if (v->acr & 0x80) /*Output to PB7*/
-                v->t1pb7 ^= 0x80;
-        }
-        if (!(v->acr & 0x40))
-            v->t1hit = 1;
+        t1_reached(v);
     }
     if (!(v->acr & 0x20)) {
         v->t2c -= cycles;
-        if (v->t2c < TLIMIT && !v->t2hit) {
-            v->ifr |= INT_TIMER2;
-            via_updateIFR(v);
-            v->t2hit=1;
+        if (v->t2c < TLIMIT) {
+            t2_reached(v);
         }
     }
     if (v->acr & 0x1c)
         via_shift(v, cycles);
 }
+#endif
 
-void via_write(VIA *v, uint16_t addr, uint8_t val)
+void __time_critical_func(via_write)(VIA *v, uint16_t addr, uint8_t val)
 {
         switch (addr&0xF)
         {
@@ -136,7 +239,23 @@ void via_write(VIA *v, uint16_t addr, uint8_t val)
                 v->write_portB(val);
                 break;
             case ACR:
-                v->acr  = val;
+                v->acr = val;
+#ifdef USE_HW_EVENT
+                if (0x20u & (v->acr & val)) {
+                    int t2c = via_get_t2c(v);
+                    if (val & 0x20) {
+                        v->t2_stopped_at = t2c;
+                        remove_hw_event(&v->timer2_event);
+                    } else {
+                        v->t2_stopped_at = -1;
+                        via_set_t2c(v, t2c);
+                        upsert_hw_event(&v->timer2_event);
+                    }
+                }
+                if (0x1cu & (v->acr & val)) {
+                    via_set_sr_count(v, v->sr_count);
+                }
+#endif
                 break;
             case PCR:
                 v->pcr  = val;
@@ -166,7 +285,7 @@ void via_write(VIA *v, uint16_t addr, uint8_t val)
                 break;
             case SR:
                 v->sr   = val;
-                v->sr_count = 16;
+                via_set_sr_count(v, 16);
                 v->ifr &= ~0x04;
                 break;
             case T1LL:
@@ -185,7 +304,7 @@ void via_write(VIA *v, uint16_t addr, uint8_t val)
                     v->t1pb7 = 0; /*Lower PB7 for one-shot timer*/
                 v->t1l &= 0x1FE;
                 v->t1l |= (val<<9);
-                v->t1c = v->t1l + 1;
+                via_set_t1c(v, v->t1l + 1);
                 v->t1hit = 0;
                 v->ifr &= ~INT_TIMER1;
                 via_updateIFR(v);
@@ -196,14 +315,14 @@ void via_write(VIA *v, uint16_t addr, uint8_t val)
                 break;
             case T2CH:
                 /*Fix for Kevin Edwards protection - if interrupt triggers in cycle before write then let it run*/
-                if ((v->t2c == TLIMIT && (v->ier & INT_TIMER2)) ||
+                if ((via_get_t2c(v) == TLIMIT && (v->ier & INT_TIMER2)) ||
                     (v->ifr & v->ier & INT_TIMER2))
                 {
-                        interrupt |= 128;
+                        interrupt_set_mask(128);
                 }
                 v->t2l &= 0x1FE;
                 v->t2l |= (val << 9);
-                v->t2c  = v->t2l + 1;
+                via_set_t2c(v, v->t2l + 1);
                 v->ifr &= ~INT_TIMER2;
                 via_updateIFR(v);
                 v->t2hit=0;
@@ -222,7 +341,7 @@ void via_write(VIA *v, uint16_t addr, uint8_t val)
         }
 }
 
-uint8_t via_read(VIA *v, uint16_t addr)
+uint8_t __time_critical_func(via_read)(VIA *v, uint16_t addr)
 {
         uint8_t temp;
         switch (addr&0xF)
@@ -269,23 +388,25 @@ uint8_t via_read(VIA *v, uint16_t addr)
             case T1LH:
                 return v->t1l >> 9;
 
-            case T1CL:
+            case T1CL: {
                 v->ifr &= ~INT_TIMER1;
                 via_updateIFR(v);
-                if (v->t1c < -1) return 0xFF; /*Return 0xFF during reload*/
-                return ((v->t1c + 1) >> 1) & 0xFF;
-
-            case T1CH:
-                if (v->t1c<-1) return 0xFF;   /*Return 0xFF during reload*/
-                return (v->t1c+1)>>9;
-
+                int t1c = via_get_t1c(v);
+                if (t1c < -1) return 0xFF; /*Return 0xFF during reload*/
+                return ((t1c + 1) >> 1) & 0xFF;
+            }
+            case T1CH: {
+                int t1c = via_get_t1c(v);
+                if (t1c < -1) return 0xFF;   /*Return 0xFF during reload*/
+                return (t1c + 1) >> 9;
+            }
             case T2CL:
                 v->ifr &= ~INT_TIMER2;
                 via_updateIFR(v);
-                return ((v->t2c + 1) >> 1) & 0xFF;
+                return ((via_get_t2c(v) + 1) >> 1) & 0xFF;
 
             case T2CH:
-                return (v->t2c+1)>>9;
+                return (via_get_t2c(v)+1)>>9;
 
             case SR:
                 return v->sr;
@@ -305,9 +426,9 @@ uint8_t via_read(VIA *v, uint16_t addr)
         return 0xFE;
 }
 
-void via_set_ca1(VIA *v, int level)
+void __time_critical_func(via_set_ca1)(VIA *v, int level)
 {
-        if (level == v->ca1) return;
+    if (level == v->ca1) return;
         if (((v->pcr & 0x01) && level) || (!(v->pcr & 0x01) && !level))
         {
                 if (v->acr & 0x01) v->ira = v->read_portA(); /*Latch port A*/
@@ -322,7 +443,7 @@ void via_set_ca1(VIA *v, int level)
         v->ca1 = level;
 }
 
-void via_set_ca2(VIA *v, int level)
+void __time_critical_func(via_set_ca2)(VIA *v, int level)
 {
         if (level == v->ca2) return;
         if (v->pcr & 0x08) return; /*Output mode*/
@@ -334,7 +455,7 @@ void via_set_ca2(VIA *v, int level)
         v->ca2 = level;
 }
 
-void via_set_cb1(VIA *v, int level)
+void __time_critical_func(via_set_cb1)(VIA *v, int level)
 {
         if (level == v->cb1) return;
         if (((v->pcr & 0x10) && level) || (!(v->pcr & 0x10) && !level))
@@ -356,7 +477,7 @@ void via_set_cb1(VIA *v, int level)
         v->cb1 = level;
 }
 
-void via_set_cb2(VIA *v, int level)
+void __time_critical_func(via_set_cb2)(VIA *v, int level)
 {
         if (level == v->cb2) return;
         if (v->pcr & 0x80) return; /*Output mode*/
@@ -368,13 +489,15 @@ void via_set_cb2(VIA *v, int level)
         v->cb2 = level;
 }
 
-void via_shift(VIA *v, int cycles) {
+void __time_critical_func(via_shift)(VIA *v, int cycles) {
     int cb1;
 
+    // todo if support is added for more modes, then via_set_sr_count must be updated
     if ((v->acr & 0x1c) == 0x18) {
         while (cycles--) {
             if (v->sr_count > 0) {
-                cb1 = !(v->sr_count-- & 0x01);
+                via_set_sr_count(v, v->sr_count - 1);
+                cb1 = !(v->sr_count & 0x01);
                 if (cb1) {
                     v->set_cb2(v->sr >> 7);
                     v->sr = (v->sr << 1);
@@ -389,16 +512,16 @@ void via_shift(VIA *v, int cycles) {
     }
 }
 
-static uint8_t via_read_null()
+static uint8_t __time_critical_func(via_read_null)()
 {
         return 0xFF;
 }
 
-static void via_write_null(uint8_t val)
+static void __time_critical_func(via_write_null)(uint8_t val)
 {
 }
 
-static void via_set_null(int level)
+static void __time_critical_func(via_set_null)(int level)
 {
 }
 
@@ -408,8 +531,19 @@ void via_reset(VIA *v)
         v->ddra  = v->ddrb  = 0;
         v->ifr   = v->ier   = 0;
         v->t1pb7            = 0;
-        v->t1c   = v->t1l   = 0x1FFFE;
-        v->t2c   = v->t2l   = 0x1FFFE;
+        v->t1l   = 0x1FFFE;
+        v->t2l   = 0x1FFFE;
+#ifdef USE_HW_EVENT
+        v->timer1_event.invoke = t1_invoke;
+        v->timer2_event.invoke = t2_invoke;
+        v->sr_event.invoke = sr_invoke;
+        v->timer1_event.user_data = v;
+        v->timer2_event.user_data = v;
+        v->sr_event.user_data = v;
+        v->t2_stopped_at = -1; // starts running
+#endif
+        via_set_t1c(v, v->t1l);
+        via_set_t2c(v, v->t2l);
         v->t1hit = v->t2hit = 1;
         v->acr   = v->pcr   = 0;
 
@@ -419,6 +553,7 @@ void via_reset(VIA *v)
         v->set_ca1 = v->set_ca2 = v->set_cb1 = v->set_cb2 = via_set_null;
 }
 
+#ifndef NO_USE_SAVE_STATE
 void via_savestate(VIA *v, FILE *f)
 {
         putc(v->ora,f);
@@ -468,3 +603,4 @@ void via_loadstate(VIA *v, FILE *f)
         v->ca1=getc(f);
         v->ca2=getc(f);
 }
+#endif

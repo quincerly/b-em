@@ -1,6 +1,7 @@
 #ifndef __INC_6502TUBE_H
 #define __INC_6502TUBE_H
 
+#ifndef NO_USE_TUBE
 #include "cpu_debug.h"
 #include "savestate.h"
 
@@ -10,6 +11,8 @@ void tube_6502_exec(void);
 void tube_6502_close(void);
 void tube_6502_mapoutrom(void);
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tube6502_cpu_debug;
-
+#endif
+#endif
 #endif

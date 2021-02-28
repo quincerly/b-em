@@ -1,6 +1,7 @@
 #ifndef __INCLUDE_VDFS_H__
 #define __INCLUDE_VDFS_H__
 
+#ifndef NO_USE_VDFS
 extern void vdfs_init(void);
 extern void vdfs_reset(void);
 extern void vdfs_close(void);
@@ -14,4 +15,5 @@ extern void vdfs_set_root(const char *dir);
 extern void vdfs_loadstate(FILE *f);
 extern void vdfs_savestate(FILE *f);
 
+#endif
 #endif

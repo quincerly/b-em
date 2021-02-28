@@ -94,6 +94,7 @@ void music5000_reset(void)
     synth_reset(&m3000);
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void synth_loadstate(struct synth *s, FILE *f, int pc)
 {
     s->pc = pc;
@@ -153,6 +154,7 @@ void music5000_savestate(FILE *f) {
     } else
         putc('m', f);
 }
+#endif
 
 void music5000_init(ALLEGRO_EVENT_QUEUE *queue)
 {

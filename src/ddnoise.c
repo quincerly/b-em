@@ -1,5 +1,7 @@
 /*B-em v2.2 by Tom Walker
-  Disc drive noise*/
+  * Pico version (C) 2021 Graham Sanderson
+  *
+  * Disc drive noise*/
 
 #include <stdio.h>
 #include "b-em.h"
@@ -8,8 +10,9 @@
 #include "sound.h"
 #include "tapenoise.h"
 
-int ddnoise_vol=3;
-int ddnoise_type=0;
+#ifndef NO_USE_DD_NOISE
+int8_t ddnoise_vol=3;
+int8_t ddnoise_type=0;
 int ddnoise_ticks = 0;
 
 static ALLEGRO_SAMPLE *seeksmp[4][2];
@@ -20,8 +23,9 @@ static ALLEGRO_SAMPLE_ID motor_smp_id;
 
 ALLEGRO_SAMPLE *find_load_wav(ALLEGRO_PATH *dir, const char *name)
 {
-    ALLEGRO_PATH *path;
     ALLEGRO_SAMPLE *smp;
+#ifndef USE_MEM_DDNOISE
+    ALLEGRO_PATH *path;
     const char *cpath;
 
     if ((path = find_dat_file(dir, name, ".wav"))) {
@@ -34,6 +38,14 @@ ALLEGRO_SAMPLE *find_load_wav(ALLEGRO_PATH *dir, const char *name)
         al_destroy_path(path);
     }
     return NULL;
+#else
+    if ((smp = al_load_sample(name))) {
+            log_debug("ddnoise: loaded %s", name);
+            return smp;
+    }
+    log_error("ddnoise: unable to load %s", name);
+    return NULL;
+#endif
 }
 
 void ddnoise_init(void)
@@ -119,7 +131,7 @@ void ddnoise_seek(int len)
 
     log_debug("ddnoise: seek %i tracks", len);
 
-    fdc_time = 200;
+    int fdc_time = 200;
     if (sound_ddnoise && len) {
         if (len < 0) {
             ddnoise_sdir = 1;
@@ -136,9 +148,12 @@ void ddnoise_seek(int len)
         if ((smp = seeksmp[ddnoise_sstat][ddnoise_sdir])) {
             al_stop_sample(&seek_smp_id);
             al_play_sample(smp, map_ddnoise_vol(), 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, &seek_smp_id);
-            fdc_time = 64000 * len;
+            // move this below so timing isn't different when sounds not found!
+//            fdc_time = 64000 * len;
         }
+        fdc_time = 64000 * len;
     }
+    set_fdc_time(fdc_time);
     log_debug("ddnoise: begin seek, fdc_time=%d", fdc_time);
 }
 
@@ -177,3 +192,4 @@ void ddnoise_spindown(void)
             al_play_sample(smp, map_ddnoise_vol(), 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, NULL);
     }
 }
+#endif

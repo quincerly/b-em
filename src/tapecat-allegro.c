@@ -35,10 +35,17 @@ static void *tapecat_thread(ALLEGRO_THREAD *thread, void *tdata)
 
 static void start_cat(void)
 {
-    if (csw_ena)
+#ifndef NO_USE_CSW
+    if (csw_ena) {
         csw_findfilenames();
-    else
-        uef_findfilenames();
+        return;
+    }
+#endif
+#ifndef NO_USE_UEF
+    uef_poll();
+    return;
+#endif
+    assert(false);
 }
 
 void gui_tapecat_start(void)

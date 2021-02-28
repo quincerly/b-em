@@ -19,6 +19,8 @@ void arm_reset(void);
 void arm_exec(void);
 void arm_close(void);
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tubearm_cpu_debug;
+#endif
 
 #endif

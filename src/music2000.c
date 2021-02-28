@@ -1,6 +1,7 @@
 #include "music2000.h"
 #include "acia.h"
 
+#ifndef NO_USE_MUSIC5000
 typedef enum {
     MS_GROUND,
     MS_ONE_OF_ONE,
@@ -139,3 +140,4 @@ void music2000_init(midi_dev_t *out1, midi_dev_t *out2, midi_dev_t *out3) {
     m2000_out2.dev = out2;
     m2000_out3.dev = out3;
 }    
+#endif

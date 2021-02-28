@@ -216,7 +216,7 @@ static void indexed (void)                      /* note take 1 extra cycle */
           cpu_clk -= 8;
           break;
         case 0x0b:
-          ea = (*R + get_d ()) & 0xffff;
+          ea = (*R + get_6809_d ()) & 0xffff;
           cpu_clk -= 8;
           break;
         case 0x0c:
@@ -275,7 +275,7 @@ static void indexed (void)                      /* note take 1 extra cycle */
           cpu_clk -= 2;
           break;
         case 0x1b:
-          ea = (*R + get_d ()) & 0xffff;
+          ea = (*R + get_6809_d ()) & 0xffff;
           cpu_clk -= 8;
           ea = RDMEM16 (ea);
           cpu_clk -= 2;
@@ -326,174 +326,174 @@ static void extended (void)
 
 /* external register functions */
 
-unsigned get_a (void)
+unsigned get_6809_a (void)
 {
   return A;
 }
 
-unsigned get_b (void)
+unsigned get_6809_b (void)
 {
   return B;
 }
 
-unsigned get_dp (void)
+unsigned get_6809_dp (void)
 {
   return DP >> 8;
 }
 
-unsigned get_x (void)
+unsigned get_6809_x (void)
 {
   return X;
 }
 
-unsigned get_y (void)
+unsigned get_6809_y (void)
 {
   return Y;
 }
 
-unsigned get_s (void)
+unsigned get_6809_s (void)
 {
   return S;
 }
 
-unsigned get_u (void)
+unsigned get_6809_u (void)
 {
   return U;
 }
 
-unsigned get_pc (void)
+unsigned get_6809_pc (void)
 {
   return PC & 0xffff;
 }
 
-unsigned get_d (void)
+unsigned get_6809_d (void)
 {
   return (A << 8) | B;
 }
 
-unsigned get_flags (void)
+unsigned get_6809_flags (void)
 {
   return EFI;
 }
 
 #ifdef H6309
-unsigned get_e (void)
+unsigned get_6809_e (void)
 {
   return E;
 }
 
-unsigned get_f (void)
+unsigned get_6809_f (void)
 {
   return F;
 }
 
-unsigned get_w (void)
+unsigned get_6809_w (void)
 {
   return (E << 8) | F;
 }
 
-unsigned get_q (void)
+unsigned get_6809_q (void)
 {
-  return (get_w () << 16) | get_d ();
+  return (get_6809_w () << 16) | get_6809_d ();
 }
 
-unsigned get_v (void)
+unsigned get_6809_v (void)
 {
   return V;
 }
 
-unsigned get_zero (void)
+unsigned get_6809_zero (void)
 {
   return 0;
 }
 
-unsigned get_md (void)
+unsigned get_6809_md (void)
 {
   return MD;
 }
 #endif
 
-void set_a (unsigned val)
+void set_6809_a (unsigned val)
 {
   A = val & 0xff;
 }
 
-void set_b (unsigned val)
+void set_6809_b (unsigned val)
 {
   B = val & 0xff;
 }
 
-void set_dp (unsigned val)
+void set_6809_dp (unsigned val)
 {
   DP = (val & 0xff) << 8;
 }
 
-void set_x (unsigned val)
+void set_6809_x (unsigned val)
 {
   X = val & 0xffff;
 }
 
-void set_y (unsigned val)
+void set_6809_y (unsigned val)
 {
   Y = val & 0xffff;
 }
 
-void set_s (unsigned val)
+void set_6809_s (unsigned val)
 {
   S = val & 0xffff;
   check_stack ();
 }
 
-void set_u (unsigned val)
+void set_6809_u (unsigned val)
 {
   U = val & 0xffff;
 }
 
-void set_pc (unsigned val)
+void set_6809_pc (unsigned val)
 {
   PC = val & 0xffff;
   check_pc ();
 }
 
-void set_d (unsigned val)
+void set_6809_d (unsigned val)
 {
   A = (val >> 8) & 0xff;
   B = val & 0xff;
 }
 
 #ifdef H6309
-void set_e (unsigned val)
+void set_6809_e (unsigned val)
 {
   E = val & 0xff;
 }
 
-void set_f (unsigned val)
+void set_6809_f (unsigned val)
 {
   F = val & 0xff;
 }
 
-void set_w (unsigned val)
+void set_6809_w (unsigned val)
 {
   E = (val >> 8) & 0xff;
   F = val & 0xff;
 }
 
-void set_q (unsigned val)
+void set_6809_q (unsigned val)
 {
-  set_w ((val >> 16) & 0xffff);
-  set_d (val & 0xffff);
+  set_6809_w ((val >> 16) & 0xffff);
+  set_6809_d (val & 0xffff);
 }
 
-void set_v (unsigned val)
+void set_6809_v (unsigned val)
 {
   V = val & 0xff;
 }
 
-void set_zero (unsigned val)
+void set_6809_zero (unsigned val)
 {
 }
 
-void set_md (unsigned val)
+void set_6809_md (unsigned val)
 {
   MD = val & 0xff;
 }
@@ -501,7 +501,7 @@ void set_md (unsigned val)
 
 /* handle condition code register */
 
-unsigned get_cc (void)
+unsigned get_6809_cc (void)
 {
   unsigned res = EFI & (E_FLAG | F_FLAG | I_FLAG);
 
@@ -519,7 +519,7 @@ unsigned get_cc (void)
   return res;
 }
 
-void set_cc (unsigned arg)
+void set_6809_cc (unsigned arg)
 {
   EFI = arg & (E_FLAG | F_FLAG | I_FLAG);
   H = ((arg & H_FLAG )? 0x10 : 0);
@@ -579,7 +579,7 @@ unsigned get_reg (unsigned nro)
       val = B;
       break;
     case 10:
-      val = get_cc ();
+      val = get_6809_cc ();
       break;
     case 11:
       val = DP >> 8;
@@ -637,7 +637,7 @@ void set_reg (unsigned nro, unsigned val)
       B = val;
       break;
     case 10:
-      set_cc (val);
+      set_6809_cc (val);
       break;
     case 11:
       DP = val << 8;
@@ -1099,7 +1099,7 @@ static void pshs (void)
     {
       cpu_clk -= 1;
       S = (S - 1) & 0xffff;
-      write_stack (S, get_cc ());
+      write_stack (S, get_6809_cc ());
     }
 }
 
@@ -1155,7 +1155,7 @@ static void pshu (void)
     {
       cpu_clk -= 1;
       U = (U - 1) & 0xffff;
-      write_stack (U, get_cc ());
+      write_stack (U, get_6809_cc ());
     }
 }
 
@@ -1168,7 +1168,7 @@ static void puls (void)
   if (post & 0x01)
     {
       cpu_clk -= 1;
-      set_cc (read_stack (S));
+      set_6809_cc (read_stack (S));
       S = (S + 1) & 0xffff;
     }
   if (post & 0x02)
@@ -1225,7 +1225,7 @@ static void pulu (void)
   if (post & 0x01)
     {
       cpu_clk -= 1;
-      set_cc (read_stack (U));
+      set_6809_cc (read_stack (U));
       U = (U + 1) & 0xffff;
     }
   if (post & 0x02)
@@ -1290,7 +1290,7 @@ static void jsr (void)
 static void rti (void)
 {
   cpu_clk -= 6;
-  set_cc (read_stack (S));
+  set_6809_cc (read_stack (S));
   S = (S + 1) & 0xffff;
 
   if ((EFI & E_FLAG) != 0)
@@ -1340,7 +1340,7 @@ static void irq (void)
   S = (S - 1) & 0xffff;
   write_stack (S, A);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
   EFI |= I_FLAG;
 
   change_pc (read16 (0xfef8));
@@ -1355,7 +1355,7 @@ static void firq (void)
   S = (S - 2) & 0xffff;
   write_stack16 (S, PC & 0xffff);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
   EFI |= (I_FLAG | F_FLAG);
 
   change_pc (read16 (0xfef6));
@@ -1383,7 +1383,7 @@ static void swi (void)
   S = (S - 1) & 0xffff;
   write_stack (S, A);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
   EFI |= (I_FLAG | F_FLAG);
 
   change_pc (read16 (0xfefa));
@@ -1408,7 +1408,7 @@ static void swi2 (void)
   S = (S - 1) & 0xffff;
   write_stack (S, A);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
 
   change_pc (read16 (0xfef4));
 }
@@ -1432,7 +1432,7 @@ static void swi3 (void)
   S = (S - 1) & 0xffff;
   write_stack (S, A);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
 
   change_pc (read16 (0xfef2));
 }
@@ -1457,7 +1457,7 @@ static void trap (void)
   S = (S - 1) & 0xffff;
   write_stack (S, A);
   S = (S - 1) & 0xffff;
-  write_stack (S, get_cc ());
+  write_stack (S, get_6809_cc ());
 
   change_pc (read16 (0xfef0));
 }
@@ -1481,7 +1481,7 @@ static void orcc (void)
 {
   unsigned tmp = imm_byte ();
 
-  set_cc (get_cc () | tmp);
+  set_6809_cc (get_6809_cc () | tmp);
   cpu_clk -= 3;
 }
 
@@ -1489,7 +1489,7 @@ static void andcc (void)
 {
   unsigned tmp = imm_byte ();
 
-  set_cc (get_cc () & tmp);
+  set_6809_cc (get_6809_cc () & tmp);
   cpu_clk -= 3;
 }
 
@@ -1797,7 +1797,7 @@ void mc6809nc_execute(void)
 #endif
               case 0x83:
                 cpu_clk -= 5;
-                cmp16 (get_d (), imm_word ());
+                cmp16 (get_6809_d (), imm_word ());
                 break;
 #ifdef H6309
               case 0x84:        /* ANDD */
@@ -1834,7 +1834,7 @@ void mc6809nc_execute(void)
               case 0x93:
                 direct ();
                 cpu_clk -= 5;
-                cmp16 (get_d (), RDMEM16 (ea));
+                cmp16 (get_6809_d (), RDMEM16 (ea));
                 cpu_clk--;
                 break;
               case 0x9c:
@@ -1856,7 +1856,7 @@ void mc6809nc_execute(void)
               case 0xa3:
                 cpu_clk--;
                 indexed ();
-                cmp16 (get_d (), RDMEM16 (ea));
+                cmp16 (get_6809_d (), RDMEM16 (ea));
                 cpu_clk--;
                 break;
               case 0xac:
@@ -1878,7 +1878,7 @@ void mc6809nc_execute(void)
               case 0xb3:
                 extended ();
                 cpu_clk -= 6;
-                cmp16 (get_d (), RDMEM16 (ea));
+                cmp16 (get_6809_d (), RDMEM16 (ea));
                 cpu_clk--;
                 break;
               case 0xbc:
@@ -2964,22 +2964,22 @@ void mc6809nc_reset (void)
 void print_regs (void)
 {
    char flags[9] = "        \0";
-   if (get_cc() & C_FLAG) flags[0] = 'C';
-   if (get_cc() & V_FLAG) flags[1] = 'V';
-   if (get_cc() & Z_FLAG) flags[2] = 'Z';
-   if (get_cc() & N_FLAG) flags[3] = 'N';
-   if (get_cc() & I_FLAG) flags[4] = 'I';
-   if (get_cc() & H_FLAG) flags[5] = 'H';
-   if (get_cc() & F_FLAG) flags[6] = 'F';
-   if (get_cc() & E_FLAG) flags[7] = 'E';
+   if (get_6809_cc() & C_FLAG) flags[0] = 'C';
+   if (get_6809_cc() & V_FLAG) flags[1] = 'V';
+   if (get_6809_cc() & Z_FLAG) flags[2] = 'Z';
+   if (get_6809_cc() & N_FLAG) flags[3] = 'N';
+   if (get_6809_cc() & I_FLAG) flags[4] = 'I';
+   if (get_6809_cc() & H_FLAG) flags[5] = 'H';
+   if (get_6809_cc() & F_FLAG) flags[6] = 'F';
+   if (get_6809_cc() & E_FLAG) flags[7] = 'E';
 
    printf (" X: 0x%04X  [X]: 0x%04X    Y: 0x%04X  [Y]: 0x%04X    ",
-            get_x(), read16(get_x()), get_y(), read16(get_y()) );
+            get_6809_x(), read16(get_6809_x()), get_6809_y(), read16(get_6809_y()) );
    printf ("PC: 0x%04X [PC]: 0x%04X\n",
-            get_pc(), read16(get_pc()) );
+            get_6809_pc(), read16(get_6809_pc()) );
    printf (" U: 0x%04X  [U]: 0x%04X    S: 0x%04X  [S]: 0x%04X    ",
-            get_u(), read16(get_u()), get_s(), read16(get_s()) );
-   printf ("DP: 0x%02X\n", get_dp() );
+            get_6809_u(), read16(get_6809_u()), get_6809_s(), read16(get_6809_s()) );
+   printf ("DP: 0x%02X\n", get_6809_dp() );
    printf (" A: 0x%02X      B: 0x%02X    [D]: 0x%04X   CC: %s\n",
-            get_a(), get_b(), read16(get_d()), flags );
+            get_6809_a(), get_6809_b(), read16(get_6809_d()), flags );
 }

@@ -1,7 +1,7 @@
 #ifndef __INC_X86_H
 #define __INC_X86_H
 
-uint32_t oldpc;
+extern uint32_t oldpc;
 
 #define setznp168 setznp16
 

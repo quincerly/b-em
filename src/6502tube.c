@@ -1,5 +1,7 @@
 /*B-em v2.2 by Tom Walker
-  6502 parasite CPU emulation*/
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * 6502 parasite CPU emulation*/
 
 #include <stdio.h>
 
@@ -41,6 +43,7 @@ void tube_6502_close()
     }
 }
 
+#ifndef NO_USE_DEBUGGER
 static int dbg_tube6502 = 0;
 
 static int dbg_debug_enable(int newvalue) {
@@ -48,6 +51,7 @@ static int dbg_debug_enable(int newvalue) {
     dbg_tube6502 = newvalue;
     return oldvalue;
 };
+#endif
 
 static inline uint8_t pack_flags(uint8_t flags) {
     if (tubep.c)
@@ -65,6 +69,7 @@ static inline uint8_t pack_flags(uint8_t flags) {
     return flags;
 }
 
+#ifndef NO_USE_SAVE_STATE
 void tube_6502_savestate(ZFILE *zfp)
 {
     unsigned char bytes[9];
@@ -83,6 +88,7 @@ void tube_6502_savestate(ZFILE *zfp)
     savestate_zwrite(zfp, tuberam, TUBE_6502_RAM_SIZE);
     savestate_zwrite(zfp, tuberom, tubes[curtube].rom_size);
 }
+#endif
 
 static inline void unpack_flags(uint8_t flags) {
     tubep.c = flags & 1;
@@ -93,6 +99,7 @@ static inline void unpack_flags(uint8_t flags) {
     tubep.n = flags & 0x80;
 }
 
+#ifndef NO_USE_SAVE_STATE
 void tube_6502_loadstate(ZFILE *zfp)
 {
     unsigned char bytes[9];
@@ -112,6 +119,9 @@ void tube_6502_loadstate(ZFILE *zfp)
     savestate_zread(zfp, tuberam, TUBE_6502_RAM_SIZE);
     savestate_zread(zfp, tuberom, tubes[curtube].rom_size);
 }
+#endif
+
+#ifndef NO_USE_DEBUGGER
 
 static uint32_t dbg_reg_get(int which) {
     switch (which) {
@@ -175,6 +185,7 @@ static void dbg_reg_parse(int which, const char *str) {
     uint32_t value = strtol(str, NULL, 16);
     dbg_reg_set(which, value);
 }
+#endif
 
 static uint32_t do_readmem(uint32_t addr);
 static void     do_writemem(uint32_t addr, uint32_t value);
@@ -186,6 +197,7 @@ static uint32_t dbg_get_instr_addr() {
     return oldtpc;
 }
 
+#ifndef NO_USE_DEBUGGER
 cpu_debug_t tube6502_cpu_debug = {
     .cpu_name       = "tube6502",
     .debug_enable   = dbg_debug_enable,
@@ -204,6 +216,7 @@ static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize) {
     return dbg6502_disassemble(&tube6502_cpu_debug, addr, buf, bufsize, M6502);
 }
 
+#endif
 #undef printf
 /*static void tubedumpregs()
 {
@@ -270,14 +283,18 @@ static void do_writemem(uint32_t addr, uint32_t value) {
 
 static uint8_t readmem(uint32_t addr) {
     uint32_t val = do_readmem(addr);
+#ifndef NO_USE_DEBUGGER
     if (dbg_tube6502)
     debug_memread(&tube6502_cpu_debug, addr, val, 1);
+#endif
     return val;
 }
 
 static void writemem(uint32_t addr, uint32_t value) {
+#ifndef NO_USE_DEBUGGER
     if (dbg_tube6502)
     debug_memwrite(&tube6502_cpu_debug, addr, value, 1);
+#endif
     do_writemem(addr, value);
 }
 
@@ -317,8 +334,10 @@ bool tube_6502_init(void *rom)
     tube_readmem = tube_6502_readmem;
     tube_writemem = tube_6502_writemem;
     tube_exec  = tube_6502_exec;
+#ifndef NO_USE_SAVE_STATE
     tube_proc_savestate = tube_6502_savestate;
     tube_proc_loadstate = tube_6502_loadstate;
+#endif
     tube_6502_reset();
     return true;
 }
@@ -470,8 +489,10 @@ void tube_6502_exec()
         while (tubecycles > 0) {
                 oldtpc2 = oldtpc;
                 oldtpc = pc;
-        if (dbg_tube6502)
+#ifndef NO_USE_DEBUGGER
+            if (dbg_tube6502)
             debug_preexec(&tube6502_cpu_debug, pc);
+#endif
         opcode = readmem(pc);
                 pc++;
 #ifdef TRACE_TUBE

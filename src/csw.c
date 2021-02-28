@@ -2,13 +2,15 @@
   CSW cassette support*/
 #include <stdio.h>
 #include <stdlib.h>
-#include <zlib.h>
 #include "b-em.h"
 #include "sysacia.h"
 #include "csw.h"
 #include "tape.h"
 
 int csw_toneon=0;
+
+#ifndef NO_USE_CSW
+#include <zlib.h>
 
 static int csw_intone = 1, csw_indat = 0, csw_datbits = 0, csw_enddat = 0;
 static uint8_t *csw_dat = NULL;
@@ -303,3 +305,4 @@ void csw_findfilenames()
         csw_loop = 0;
 }
 
+#endif

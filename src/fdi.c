@@ -9,6 +9,7 @@
 #include "fdi2raw.h"
 #include "disc.h"
 
+#ifndef NO_USE_FDI
 static FILE *fdi_f[2];
 static FDI  *fdi_h[2];
 static uint8_t fdi_trackinfo[2][2][2][65536];
@@ -172,6 +173,9 @@ static void calccrc(uint8_t byte)
 
 static void fdi_poll()
 {
+#ifdef USE_HW_EVENT
+#error needs hw_event polling
+#endif
         int tempi, c;
         if (fdi_pos >= fdi_tracklen[fdi_drive][fdi_side][fdi_density])
         {
@@ -384,3 +388,4 @@ void fdi_load(int drive, const char *fn)
         drives[drive].abort       = fdi_abort;
 }
 
+#endif

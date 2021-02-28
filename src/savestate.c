@@ -39,8 +39,10 @@ void savestate_save(const char *name)
     log_debug("savestate: save, name=%s", name);
     if (savestate_fp)
         log_error("savestate: an operation is already in progress");
+#ifndef NO_USE_TUBE
     else if (curtube != -1 && !tube_proc_savestate)
         log_error("savestate: current tube processor does not support saving state");
+#endif
     else {
         name_len = strlen(name);
         if ((name_copy = malloc(name_len + 5))) {
@@ -201,12 +203,16 @@ void savestate_dosave(void)
     save_sect('A', adc_savestate);
     save_sect('a', sysacia_savestate);
     save_sect('r', serial_savestate);
+#ifndef NO_USE_VDFS
     save_sect('F', vdfs_savestate);
+#endif
     save_sect('5', music5000_savestate);
+#ifndef NO_USE_TUBE
     if (curtube != -1) {
         save_sect('T', tube_ula_savestate);
         save_zlib('P', tube_proc_savestate);
     }
+#endif
     fclose(savestate_fp);
     savestate_wantsave = 0;
     savestate_fp = NULL;
@@ -229,7 +235,12 @@ static void load_state_one(void)
     adc_loadstate(savestate_fp);
     acia_loadstate(&sysacia, savestate_fp);
     serial_loadstate(savestate_fp);
+#ifndef NO_USE_VDFS
     vdfs_loadstate(savestate_fp);
+#else
+    log_fatal("no vdfs");
+    exit(1);
+#endif
     music5000_loadstate(savestate_fp);
 
     log_debug("savestate: loaded V1 snapshot file");
@@ -325,12 +336,15 @@ static void load_state_two(void)
             case 'r':
                 serial_loadstate(savestate_fp);
                 break;
+#ifndef NO_USE_VDFS
             case 'F':
                 vdfs_loadstate(savestate_fp);
                 break;
+#endif
             case '5':
                 music5000_loadstate(savestate_fp);
                 break;
+#ifndef NO_USE_TUBE
             case 'T':
                 if (curtube != -1)
                     tube_ula_loadstate(savestate_fp);
@@ -339,6 +353,7 @@ static void load_state_two(void)
                 if (tube_proc_loadstate)
                     load_zlib(size, tube_proc_loadstate);
                 break;
+#endif
         }
         end = ftell(savestate_fp);
         if (end == start) {

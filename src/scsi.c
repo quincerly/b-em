@@ -19,6 +19,7 @@ Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
 Boston, MA  02110-1301, USA.
 ****************************************************************/
 
+#ifndef NO_USE_SCSI
 /* SCSI Support for Beebem */
 /* Based on code written by Y. Tanaka */
 /* 26/12/2011 JGH: Disk images at DiscsPath, not AppPath */
@@ -515,10 +516,10 @@ static void Execute(void)
 
 	if (scsi.cmd[0] <= 0x1f) {
 		log_debug("scsi lun %d: Execute 0x%02x, Param 1=0x%02x, Param 2=0x%02x, Param 3=0x%02x, Param 4=0x%02x, Param 5=0x%02x, Phase = %d, PC = 0x%04x\n",
-				scsi.lun, scsi.cmd[0], scsi.cmd[1], scsi.cmd[2], scsi.cmd[3], scsi.cmd[4], scsi.cmd[5], scsi.phase, pc);
+				scsi.lun, scsi.cmd[0], scsi.cmd[1], scsi.cmd[2], scsi.cmd[3], scsi.cmd[4], scsi.cmd[5], scsi.phase, get_pc());
 	} else {
 		log_debug("scsi lun %d: Execute 0x%02x, Param 1=0x%02x, Param 2=0x%02x, Param 3=0x%02x, Param 4=0x%02x, Param 5=0x%02x, Param 6=0x%02x, Param 7=0x%02x, Param 8=0x%02x, Param 9=0x%02x, Phase = %d, PC = 0x%04x\n",
-				scsi.lun, scsi.cmd[0], scsi.cmd[1], scsi.cmd[2], scsi.cmd[3], scsi.cmd[4], scsi.cmd[5], scsi.cmd[6], scsi.cmd[7], scsi.cmd[8], scsi.cmd[9], scsi.phase, pc);
+				scsi.lun, scsi.cmd[0], scsi.cmd[1], scsi.cmd[2], scsi.cmd[3], scsi.cmd[4], scsi.cmd[5], scsi.cmd[6], scsi.cmd[7], scsi.cmd[8], scsi.cmd[9], scsi.phase, get_pc());
 	}
 
 	//LEDs.HDisc[scsi.lun] = 1;
@@ -697,14 +698,14 @@ void scsi_write(uint16_t addr, uint8_t value)
                         {
                                 log_debug("set interrupt\n");
                                 scsi.irq = true;
-                                interrupt |= 1 << (SCSI_INT_NUM);
+                                interrupt_set_mask(1 << (SCSI_INT_NUM));
                                 scsi.status = 0x00;
                         }
                         else
                         {
                                 log_debug("clear interrupt\n");
                                 scsi.irq = false;
-                                interrupt &= ~(1 << (SCSI_INT_NUM));
+                                interrupt_clr_mask(1 << (SCSI_INT_NUM));
                         }
 			break;
         }
@@ -847,9 +848,9 @@ static void scsi_init_lun(int lun)
                         if ((dsc = fopen(name, "wb")))
                         {
                                 cyl = 1 + ((size - 1) / (33 * 255));
-                                geom[13] = cyl % 256;
-                                geom[14] = cyl / 256;
-                                geom[15] = 255;
+                                geom[13] = (char)(cyl % 256);
+                                geom[14] = (char)(cyl / 256);
+                                geom[15] = (char)255;
                                 if (fwrite(geom, sizeof geom, 1, dsc) != 1)
                                         log_warn("scsi lun %d: unable to write to dsc file %s: %s", lun, name, strerror(errno));
                                 fclose(dsc);
@@ -890,3 +891,4 @@ void scsi_close(void)
                 }
         }
 }
+#endif

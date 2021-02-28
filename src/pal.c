@@ -5,6 +5,7 @@
 #include "video.h"
 #include "video_render.h"
 
+#ifndef NO_USE_PAL
 #define PAL_FLOAT
 
 #ifdef PAL_FIXED
@@ -329,4 +330,5 @@ void pal_convert(int x1, int y1, int x2, int y2, int yoff)
         al_unlock_bitmap(b32);
 }
 
+#endif
 #endif

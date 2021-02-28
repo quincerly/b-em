@@ -985,7 +985,7 @@ static void ibm_data (FDI *fdi, uae_u8 *data, uae_u8 *crc, int len)
 
 static void ibm_sector_header (FDI *fdi, uae_u8 *data, uae_u8 *crc, int secnum, int pre)
 {
-	uae_u8 secbuf[5];
+	uae_u8 secbuf[5] = {0,0,0,0,0};
 	uae_u8 crcbuf[2];
 	uae_u16 crcv;
 	int i;
@@ -1002,7 +1002,9 @@ static void ibm_sector_header (FDI *fdi, uae_u8 *data, uae_u8 *crc, int secnum, 
 		secbuf[3] = (uae_u8)secnum;
 		secbuf[4] = 2;
 	} else {
-		memcpy (secbuf + 1, data, 4);
+	    if (data) {
+            memcpy(secbuf + 1, data, 4);
+        }
 	}
 	ibm_crc (secbuf[0], 1);
 	ibm_crc (secbuf[1], 0);
@@ -1647,12 +1649,12 @@ static void fdi2_decode (FDI *fdi, uint32_t totalavg, uae_u32 *avgp, uae_u32 *mi
 				}
 				avg_pulse += jitter;
 				if ((avg_pulse < min_pulse) || (avg_pulse > max_pulse)) {
-					log_debug("FDI: avg_pulse outside bounds! avg=%u min=%u max=%u\n", avg_pulse, min_pulse, max_pulse);
+					log_debug("FDI: avg_pulse outside bounds! avg=%u min=%u max=%u\n", (int)avg_pulse, (int)min_pulse, (int)max_pulse);
 					log_debug("FDI: avgp=%u (%u) minp=%u (%u) maxp=%u (%u) jitter=%ld i=%d ni=%d\n",
-						avgp[i], avgp[nexti], minp[i], minp[nexti], maxp[i], maxp[nexti], jitter, i, nexti);
+                              (int)avgp[i], (int)avgp[nexti], (int)minp[i], (int)minp[nexti], (int)maxp[i], (int)maxp[nexti], jitter, i, nexti);
 				}
 				if (avg_pulse < ref_pulse)
-					log_debug("FDI: avg_pulse < ref_pulse! (%u < %u)\n", avg_pulse, ref_pulse);
+					log_debug("FDI: avg_pulse < ref_pulse! (%u < %u)\n", (int)avg_pulse, (int)ref_pulse);
 				pulse += avg_pulse - ref_pulse;
 				ref_pulse = 0;
 				if (i == eodat)
@@ -1926,7 +1928,7 @@ static int decode_lowlevel_track (FDI *fdi, int track, struct fdi_cache *cache)
 	}
 	len = totalavg / 100000;
 	log_debug("totalavg=%u index=%d maxidx=%d weakbits=%d len=%d\n",
-		totalavg, indexoffset, maxidx, weakbits, len);
+              (int)totalavg, indexoffset, (int)maxidx, (int)weakbits, len);
 	cache->avgp = avgp;
 	cache->idxp = idxp;
 	cache->minp = minp;
@@ -2097,7 +2099,7 @@ int fdi2raw_loadrevolution_2 (FDI *fdi, uae_u16 *mfmbuf, uae_u16 *tracktiming, i
                 cache->maxidx, &idx, cache->pulses, mfm);
         //fdi2_gcr_decode (fdi, totalavg, avgp, minp, maxp, idxp, idx_off1, idx_off2, idx_off3, maxidx, pulses);
         log_debug("track %d: nbits=%d avg len=%.2f weakbits=%d idx=%d\n",
-                track, bitoffset, (double)cache->totalavg / bitoffset, cache->weakbits, cache->indexoffset);
+                track, bitoffset, (double)cache->totalavg / bitoffset, cache->weakbits, (int)cache->indexoffset);
         len = fdi->out;
         if (cache->weakbits >= 10 && multirev)
                 *multirev = 1;

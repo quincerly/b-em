@@ -3,6 +3,7 @@
 
 typedef struct acia ACIA;
 
+#ifndef NO_USE_ACIA
 struct acia {
     uint8_t control_reg;
     uint8_t status_reg;
@@ -27,4 +28,5 @@ void acia_loadstate(ACIA *acia, FILE *f);
 void acia_dcdhigh(ACIA *acia);
 void acia_dcdlow(ACIA *acia);
 
+#endif
 #endif

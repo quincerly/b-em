@@ -8,6 +8,7 @@
 #include "tape.h"
 #include "tapenoise.h"
 
+#ifndef NO_USE_ACIA
 int motor, acia_is_tape;
 
 static uint8_t serial_reg;
@@ -25,9 +26,13 @@ void serial_write(uint16_t addr, uint8_t val)
         serial_reg = val;
         serial_transmit_rate = val & 0x7;
         serial_recive_rate = (val >> 3) & 0x7;
+#ifndef NO_USE_TAPE
         if (motor != (val & 0x80))
            tapenoise_motorchange(val>>7);
+#endif
+#ifndef NO_USE_TAPE
         motor = (val & 0x80) && tape_loaded;
+#endif
         if (val & 0x40)
         {
             /*RS423*/
@@ -59,3 +64,4 @@ void serial_loadstate(FILE *f)
 {
         serial_write(0, getc(f));
 }
+#endif

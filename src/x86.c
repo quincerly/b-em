@@ -35,13 +35,17 @@ static inline uint8_t readmemblx86(uint32_t addr)
         return 0xFF;
 }
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t tubex86_cpu_debug;
+#endif
 
 static inline uint8_t readmembl(uint32_t addr)
 {
     uint8_t byte = readmemblx86(addr);
+#ifndef NO_USE_DEBUGGER
     if (dbg_x86)
         debug_memread(&tubex86_cpu_debug, addr, byte, 1);
+#endif
     return byte;
 }
 
@@ -57,8 +61,10 @@ static inline uint16_t readmemwl(uint32_t seg, uint32_t addr)
 {
     uint32_t ea = seg + addr;
     uint16_t word = readmemwlx86(ea);
+#ifndef NO_USE_DEBUGGER
     if (dbg_x86)
         debug_memread(&tubex86_cpu_debug, ea, word, 2);
+#endif
     return word;
 }
 
@@ -69,8 +75,10 @@ static inline void writememblx86(uint32_t addr, uint8_t byte)
 
 static inline void writemembl(uint32_t addr, uint8_t byte)
 {
+#ifndef NO_USE_DEBUGGER
     if (dbg_x86)
         debug_memwrite(&tubex86_cpu_debug, addr, byte, 1);
+#endif
     writememblx86(addr, byte);
 }
 
@@ -82,8 +90,10 @@ static inline void writememwlx86(uint32_t addr, uint16_t word)
 static inline void writememwl(uint32_t seg, uint32_t addr, uint16_t word)
 {
     uint32_t ea = seg + addr;
+#ifndef NO_USE_DEBUGGER
     if (dbg_x86)
         debug_memwrite(&tubex86_cpu_debug, ea, word, 2);
+#endif
     writememwlx86(ea, word);
 }
 
@@ -118,6 +128,8 @@ static inline void out_port(uint16_t port, uint8_t val)
     if ((port & ~0xF) == 0x80)
         tube_parasite_write(port>>1,val);
 }
+
+#ifndef NO_USE_DEBUGGER
 
 /*****************************************************
  * CPU Debug Interface
@@ -357,6 +369,8 @@ cpu_debug_t tubex86_cpu_debug = {
    .get_instr_addr = x86_dbg_get_instr_addr
 };
 
+#endif
+
 #define pc x86pc
 
 static void x86dumpregs();
@@ -388,13 +402,13 @@ r16(/r)                    AX    CX    DX    BX    SP    BP    SI    DI
 r32(/r)                    EAX   ECX   EDX   EBX   ESP   EBP   ESI   EDI
 /digit (Opcode)            0     1     2     3     4     5     6     7
 REG =                      000   001   010   011   100   101   110   111
-  ÚÄÄÄAddress
+  ï¿½ï¿½ï¿½ï¿½Address
 disp8 denotes an 8-bit displacement following the ModR/M byte, to be
 sign-extended and added to the index. disp16 denotes a 16-bit displacement
 following the ModR/M byte, to be added to the index. Default segment
 register is SS for the effective addresses containing a BP index, DS for
 other effective addresses.
-            ÄÄ¿ ÚMod R/M¿ ÚÄÄÄÄÄÄÄÄModR/M Values in HexadecimalÄÄÄÄÄÄÄÄ¿
+            ï¿½Ä¿ ï¿½Mod R/Mï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ModR/M Values in Hexadecimalï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿
 
 [BX + SI]            000   00    08    10    18    20    28    30    38
 [BX + DI]            001   01    09    11    19    21    29    31    39
@@ -632,6 +646,7 @@ static unsigned char *save_seg(unsigned char *ptr, x86seg *seg)
     return ptr;
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void x86_savestate(ZFILE *zfp)
 {
     unsigned char bytes[150], *ptr;
@@ -716,6 +731,7 @@ static void x86_loadstate(ZFILE *zfp)
     savestate_zread(zfp, x86ram, X86_RAM_SIZE);
     savestate_zread(zfp, x86rom, X86_ROM_SIZE);
 }
+#endif
 
 bool x86_init(void *rom)
 {
@@ -733,8 +749,10 @@ bool x86_init(void *rom)
     tube_readmem = x86_readmem;
     tube_writemem = x86_writemem;
     tube_exec  = x86_exec;
+#ifndef NO_USE_SAVE_STATE
     tube_proc_savestate = x86_savestate;
     tube_proc_loadstate = x86_loadstate;
+#endif
     x86_reset();
     return true;
 }
@@ -872,15 +890,19 @@ static void x86setsbc16(uint16_t a, uint16_t b)
 static uint8_t inb(uint16_t port)
 {
         uint8_t byte = in_port(port);
-        if (dbg_x86)
+#ifndef NO_USE_DEBUGGER
+    if (dbg_x86)
             debug_ioread(&tubex86_cpu_debug, port, byte, 1);
+#endif
         return byte;
 }
 
 static void outb(uint16_t port, uint8_t val)
 {
-        if (dbg_x86)
+#ifndef NO_USE_DEBUGGER
+    if (dbg_x86)
             debug_iowrite(&tubex86_cpu_debug, port, val, 1);
+#endif
         out_port(port, val);
 }
 
@@ -1140,8 +1162,10 @@ void x86_exec()
                 oldpc=pc;
                 opcodestart:
                 ea = cs+pc;
-                if (dbg_x86)
+#ifndef NO_USE_DEBUGGER
+            if (dbg_x86)
                     debug_preexec(&tubex86_cpu_debug, ea);
+#endif
                 opcode=readmembl(ea);
                 tempc=flags&C_FLAG;
 #if 0

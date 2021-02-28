@@ -208,10 +208,12 @@ uint32_t dbg6502_disassemble(cpu_debug_t *cpu, uint32_t addr, char *buf, size_t 
         ni = op_cmos[op];
         addr_mode = am_cmos[op];
         break;
+#ifndef NO_USE_TUBE
     case W65816:
         ni = op_816[op];
         addr_mode = am_816[op];
         break;
+#endif
     default:
         log_fatal("6502debug: unkown 6502 model %d", model);
         exit(-1);
@@ -237,7 +239,11 @@ uint32_t dbg6502_disassemble(cpu_debug_t *cpu, uint32_t addr, char *buf, size_t 
             break;
         case IMV:
             p1 = cpu->memread(addr++);
+#ifndef NO_USE_TUBE
             if (w65816p.m)
+#else
+            if (false)
+#endif
                 snprintf(buf, bufsize, "%02X       %s #%02X     ", p1, op_name, p1);
             else {
                 p2 = cpu->memread(addr++);
@@ -246,7 +252,11 @@ uint32_t dbg6502_disassemble(cpu_debug_t *cpu, uint32_t addr, char *buf, size_t 
             break;
         case IMX:
             p1 = cpu->memread(addr++);
+#ifndef NO_USE_TUBE
             if (w65816p.ex)
+#else
+            if (false)
+#endif
                 snprintf(buf, bufsize, "%02X       %s #%02X     ", p1, op_name, p1);
             else {
                 p2 = cpu->memread(addr++);
@@ -353,12 +363,12 @@ uint32_t dbg6502_disassemble(cpu_debug_t *cpu, uint32_t addr, char *buf, size_t 
 
 size_t dbg6502_print_flags(PREG *pp, char *buf, size_t bufsize) {
     if (bufsize >= 6) {
-	*buf++ = p.n ? 'N' : ' ';
-	*buf++ = p.v ? 'V' : ' ';
-	*buf++ = p.d ? 'D' : ' ';
-	*buf++ = p.i ? 'I' : ' ';
-	*buf++ = p.z ? 'Z' : ' ';
-	*buf++ = p.c ? 'C' : ' ';
+	*buf++ = get_n() ? 'N' : ' ';
+	*buf++ = get_v() ? 'V' : ' ';
+	*buf++ = get_d() ? 'D' : ' ';
+	*buf++ = get_i() ? 'I' : ' ';
+	*buf++ = get_z() ? 'Z' : ' ';
+	*buf++ = get_c() ? 'C' : ' ';
 	return 6;
     }
     return 0;

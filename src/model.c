@@ -15,13 +15,19 @@
 #include "wd1770.h"
 #include "x86_tube.h"
 #include "z80.h"
+#include "6502.h"
 
 #define CFG_SECT_LEN 20
 
 fdc_type_t fdc_type;
-bool BPLUS, x65c02, MASTER, MODELA, OS01, compactcmos;
-int curtube;
-int oldmodel, model_count;
+bool BPLUS, x65c02, MASTER, MODELA, OS01;
+#ifndef NO_USE_COMPACT
+bool compactcmos;
+#endif
+#ifndef NO_USE_TUBE
+int8_t curtube;
+#endif
+int8_t oldmodel, model_count;
 MODEL *models;
 ALLEGRO_PATH *tube_dir;
 
@@ -39,33 +45,42 @@ static const char fdc_names[FDC_MAX][8] =
 #define NUM_ROM_SETUP 5
 static rom_setup_t rom_setups[NUM_ROM_SETUP] =
 {
+#ifndef PICO_BUILD
     { "swram",   mem_romsetup_swram   },
     { "os01",    mem_romsetup_os01    },
+#endif
     { "std",     mem_romsetup_std     },
     { "bp128",   mem_romsetup_bp128   },
     { "master",  mem_romsetup_master  }
 };
 
+#ifndef NO_USE_TUBE
 /*
  * The number of tube cycles to run for each core 6502 processor cycle
  * is calculated by mutliplying the multiplier in this table with the
  * one in the general tube speed table and dividing by two.
  */
 
+#ifndef NO_USE_DEBUGGER
 extern cpu_debug_t n32016_cpu_debug;
+#define MAKE_TUBE(name, init, reset, debug, size, bootrom, multiplier) name, init, reset, debug, size, bootrom, multiplier
+#else
+#define MAKE_TUBE(name, init, reset, debug, size, bootrom, multiplier) name, init, reset, size, bootrom, multiplier
+#endif
 
 TUBE tubes[NUM_TUBES]=
 {
-    {"6502 Internal",  tube_6502_init,  tube_6502_reset, &tube6502_cpu_debug,  0x0800, "6502Intern",       4 },
-    {"ARM",            arm_init,        arm_reset,       &tubearm_cpu_debug,   0x4000, "ARMeval_100",      4 },
-    {"Z80",            z80_init,        z80_reset,       &tubez80_cpu_debug,   0x1000, "Z80_122",          6 },
-    {"80186",          x86_init,        x86_reset,       &tubex86_cpu_debug,   0x4000, "BIOS",             8 },
-    {"65816",          w65816_init,     w65816_reset,    &tube65816_cpu_debug, 0x8000, "ReCo6502ROM_816", 16 },
-    {"32016",          tube_32016_init, n32016_reset,    &n32016_cpu_debug,    0x0000, "",                 8 },
-    {"6502 External",  tube_6502_init,  tube_6502_reset, &tube6502_cpu_debug,  0x0800, "6502Tube",         3 },
-    {"6809",           tube_6809_init,  mc6809nc_reset,  &mc6809nc_cpu_debug,  0x0800, "6809Tube",        16 }
+    {MAKE_TUBE("6502 Internal",  tube_6502_init,  tube_6502_reset, &tube6502_cpu_debug,  0x0800, "6502Intern",       4) },
+    {MAKE_TUBE("ARM",            arm_init,        arm_reset,       &tubearm_cpu_debug,   0x4000, "ARMeval_100",      4) },
+    {MAKE_TUBE("Z80",            z80_init,        z80_reset,       &tubez80_cpu_debug,   0x1000, "Z80_122",          6) },
+    {MAKE_TUBE("80186",          x86_init,        x86_reset,       &tubex86_cpu_debug,   0x4000, "BIOS",             8) },
+    {MAKE_TUBE("65816",          w65816_init,     w65816_reset,    &tube65816_cpu_debug, 0x8000, "ReCo6502ROM_816", 16) },
+    {MAKE_TUBE("32016",          tube_32016_init, n32016_reset,    &n32016_cpu_debug,    0x0000, "",                 8) },
+    {MAKE_TUBE("6502 External",  tube_6502_init,  tube_6502_reset, &tube6502_cpu_debug,  0x0800, "6502Tube",         3) },
+    {MAKE_TUBE("6809",           tube_6809_init,  mc6809nc_reset,  &mc6809nc_cpu_debug,  0x0800, "6809Tube",        16) }
 };
 
+#endif
 static fdc_type_t model_find_fdc(const char *name, const char *model)
 {
     fdc_type_t fdc_type;
@@ -88,12 +103,14 @@ static rom_setup_t *model_find_romsetup(const char *name, const char *model)
 
 static int model_find_tube(const char *name, const char *model)
 {
+#ifndef NO_USE_TUBE
     if (strcmp(name, "none")) {
         for (int i = 0; i < NUM_TUBES; i++)
             if (strcmp(tubes[i].name, name) == 0)
                 return i;
         log_warn("model: invalid tube name '%s' in model '%s', no tube will be used", name, model);
     }
+#endif
     return -1;
 }
 
@@ -147,9 +164,15 @@ void model_check(void) {
     const int defmodel = 3;
 
     if (curmodel < 0 || curmodel >= model_count) {
-        log_warn("No model #%d, using #%d (%s) instead", curmodel, defmodel, models[defmodel].name);
-        curmodel = defmodel;
+        if (defmodel >= model_count) {
+            log_warn("No model #%d, using #%d (%s) instead", curmodel, 0, models[0].name);
+            curmodel = 0;
+        } else {
+            log_warn("No model #%d, using #%d (%s) instead", curmodel, defmodel, models[defmodel].name);
+            curmodel = defmodel;
+        }
     }
+#ifndef NO_USE_TUBE
     if (models[curmodel].tube != -1)
         curtube = models[curmodel].tube;
     else
@@ -158,8 +181,10 @@ void model_check(void) {
         log_warn("No tube #%d, running with no tube instead", curtube);
         curtube = -1;
     }
+#endif
 }
 
+#ifndef NO_USE_TUBE
 static void *tuberom = NULL;
 
 static void tube_init(void)
@@ -210,15 +235,20 @@ static void tube_init(void)
         }
     }
 }
+#endif
 
 void model_init()
 {
     model_check();
 
+#ifndef NO_USE_TUBE
     if (curtube == -1)
         log_info("model: starting emulation as model #%d, %s", curmodel, models[curmodel].name);
     else
         log_info("model: starting emulation as model #%d, %s with tube #%d, %s", curmodel, models[curmodel].name, curtube, tubes[curtube].name);
+#else
+    log_info("model: starting emulation as model #%d, %s", curmodel, models[curmodel].name);
+#endif
 
     fdc_type    = models[curmodel].fdc_type;
     BPLUS       = models[curmodel].bplus;
@@ -226,14 +256,20 @@ void model_init()
     MASTER      = models[curmodel].master;
     MODELA      = models[curmodel].modela;
     OS01        = models[curmodel].os01;
+#ifndef NO_USE_COMPACT
     compactcmos = models[curmodel].compact;
+#endif
 
     mem_clearroms();
     models[curmodel].romsetup->func();
+    m6502_init();
+#ifndef NO_USE_TUBE
     tube_init();
+#endif
     cmos_load(models[curmodel]);
 }
 
+#ifndef NO_USE_SAVE_STATE
 void model_savestate(FILE *f)
 {
     MODEL *model = models + curmodel;
@@ -249,6 +285,7 @@ void model_savestate(FILE *f)
     putc(model->modela, f);
     putc(model->os01, f);
     putc(model->compact, f);
+#ifndef NO_USE_TUBE
     if (model->tube >= 0) {
         putc(1, f);
         savestate_save_str(tubes[model->tube].name, f);
@@ -259,8 +296,13 @@ void model_savestate(FILE *f)
     }
     else
         putc(0, f);
+#else
+    putc(0, f);
+#endif
 }
+#endif
 
+#ifndef NO_USE_SAVE_STATE
 static bool model_cmp(int modelno, MODEL *nmodel)
 {
     MODEL *tmodel = models + modelno;
@@ -300,6 +342,7 @@ void model_loadstate(FILE *f)
     model.compact = getc(f);
 
     switch(getc(f)) {
+#ifndef NO_USE_TUBE
         case 1:
             tube_name = savestate_load_str(f);
             model.tube = model_find_tube(tube_name, model.name);
@@ -309,6 +352,7 @@ void model_loadstate(FILE *f)
             model.tube = -1;
             selecttube = model_find_tube(tube_name, model.name);
             break;
+#endif
         default:
             tube_name = NULL;
             model.tube = -1;
@@ -356,6 +400,7 @@ void model_loadstate(FILE *f)
 
     main_restart();
 }
+#endif
 
 void model_savecfg(void) {
     const char *sect = models[curmodel].cfgsect;

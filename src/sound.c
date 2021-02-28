@@ -1,5 +1,6 @@
-/*B-em v2.2 by Tom Walker
-  Internal SN sound chip emulation*/
+/* B-em v2.2 by Tom Walker
+  * Pico version (C) 2021 Graham Sanderson
+  * Internal SN sound chip emulation*/
 
 #include "b-em.h"
 #include <allegro5/allegro_audio.h>
@@ -12,15 +13,23 @@
 
 bool sound_internal = false, sound_beebsid = false, sound_dac = false;
 bool sound_ddnoise = false, sound_tape = false;
-bool sound_music5000 = false, sound_filter = false;
+bool sound_music5000 = false;
+#ifndef NO_USE_SOUND_FILTER
+bool sound_filter = false;
+#endif
 
 static ALLEGRO_VOICE *voice;
 static ALLEGRO_MIXER *mixer;
 static ALLEGRO_AUDIO_STREAM *stream;
 
 static int sound_pos = 0;
+//#ifndef PICO_BUILD
 static short sound_buffer[BUFLEN_SO];
+//#else
+//static int16_t *sound_buffer;
+//#endif
 
+#ifndef NO_USE_SOUND_FILTER
 #define NCoef 4
 static float iir(float NewSample) {
     static const float ACoef[NCoef+1] = {
@@ -57,32 +66,38 @@ static float iir(float NewSample) {
 
     return y[0];
 }
+#endif
 
-void sound_poll(void)
+void __time_critical_func(sound_poll)()
 {
-    float *buf;
     int c;
 
     if ((sound_internal || sound_beebsid) && stream) {
+#ifndef NO_USE_SID
         if (sound_beebsid)
             sid_fillbuf(sound_buffer + sound_pos, 2);
+#endif
         if (sound_internal)
             sn_fillbuf(sound_buffer + sound_pos, 2);
         if (sound_dac) {
-            sound_buffer[sound_pos]     += (((int)lpt_dac - 0x80) * 32);
-            sound_buffer[sound_pos + 1] += (((int)lpt_dac - 0x80) * 32);
+            sound_buffer[sound_pos] += (((int) lpt_dac - 0x80) * 32);
+            sound_buffer[sound_pos + 1] += (((int) lpt_dac - 0x80) * 32);
         }
 
         // skip forward 2 mono samples
         sound_pos += 2;
         if (sound_pos == BUFLEN_SO) {
+            float *buf;
             if ((buf = al_get_audio_stream_fragment(stream))) {
+#ifndef NO_USE_SOUND_FILTER
                 if (sound_filter) {
                     for (c = 0; c < BUFLEN_SO; c++)
-                        buf[c] = iir((float)sound_buffer[c] / 32767.0);
-                } else {
+                        buf[c] = iir((float) sound_buffer[c] / 32767.0);
+                } else
+#endif
+                {
                     for (c = 0; c < BUFLEN_SO; c++)
-                        buf[c] = (float)sound_buffer[c] / 32767.0;
+                        buf[c] = (float) sound_buffer[c] / 32767.0;
                 }
                 al_set_audio_stream_fragment(stream, buf);
                 al_set_audio_stream_playing(stream, true);
@@ -151,4 +166,8 @@ void sound_close(void)
         al_destroy_mixer(mixer);
     if (voice)
         al_destroy_voice(voice);
+}
+
+int sound_cycle_sync() {
+    return 0;
 }

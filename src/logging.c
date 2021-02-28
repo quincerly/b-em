@@ -18,10 +18,15 @@ typedef struct {
     const char *name;
 } log_level_t;
 
+static unsigned log_options = 0x22222;
+
 static const log_level_t ll_fatal = { 0xf0000, 16, "FATAL"   };
 static const log_level_t ll_error = { 0x0f000, 12, "ERROR"   };
 static const log_level_t ll_warn  = { 0x00f00,  8, "WARNING" };
 static const log_level_t ll_info  = { 0x000f0,  4, "INFO"    };
+
+#if !defined(PICO_BUILD) || !defined(PICO_NO_HARDWARE)
+
 static const log_level_t ll_debug = { 0x0000f,  0, "DEBUG"   };
 
 static const log_level_t *log_levels[] =
@@ -34,19 +39,19 @@ static const log_level_t *log_levels[] =
     NULL
 };
 
+static FILE *log_fp;
 static const char log_section[]    = "logging";
 static const char log_default_fn[] = "b-emlog";
 
-static unsigned log_options = 0x22222;
-
-static FILE *log_fp;
 static char   tmstr[20];
 static time_t last = 0;
+#endif
 
-static void log_msgbox(const char *level, char *msg)
+#ifndef NO_USE_ALLEGRO_GUI
+static void log_msgbox(const char *level, const char *msg)
 {
     const int max_len = 80;
-    char *max_ptr, *new_split, *cur_split;
+    const char *max_ptr, *new_split, *cur_split;
     ALLEGRO_DISPLAY *display;
 
     display = al_get_current_display();
@@ -61,21 +66,24 @@ static void log_msgbox(const char *level, char *msg)
 
         if (cur_split > msg)
         {
-            *cur_split = '\0';
-            al_show_native_message_box(display, level, msg, cur_split+1, NULL, 0);
-            *cur_split = ' ';
+            char heading[max_len];
+            memcpy(heading, msg, cur_split - msg);
+            heading[cur_split - msg] = '\0';
+            al_show_native_message_box(display, level, heading, cur_split+1, NULL, 0);
         }
         else
             al_show_native_message_box(display, level, msg, "", NULL, 0);
     }
 }
+#endif
 
-static void log_common(unsigned dest, const char *level, char *msg, size_t len)
+static void log_common(unsigned dest, const char *level, const char *msg, size_t len)
 {
-    time_t now;
 
     while (msg[len-1] == '\n')
         len--;
+#if !defined(PICO_BUILD) || !defined(PICO_NO_HARDWARE)
+    time_t now;
     if ((dest & LOG_DEST_FILE) && log_fp) {
         time(&now);
         if (now != last) {
@@ -91,11 +99,18 @@ static void log_common(unsigned dest, const char *level, char *msg, size_t len)
         fwrite(msg, len, 1, stderr);
         putc('\n', stderr);
     }
+#ifndef NO_USE_ALLEGRO_GUI
     if (dest & LOG_DEST_MSGBOX)
         log_msgbox(level, msg);
+#endif
+#else
+    if (dest & LOG_DEST_STDERR) {
+        puts(msg);
+    }
+#endif
 }
 
-static char msg_malloc[] = "log_format: out of space - following message truncated";
+static const char msg_malloc[] = "log_format: out of space - following message truncated";
 
 static void log_format(const log_level_t *ll, const char *fmt, va_list ap)
 {
@@ -161,15 +176,24 @@ void log_error(const char *fmt, ...)
     va_end(ap);
 }
 
+
+#if !PICO_ON_DEVICE
 void log_fatal(const char *fmt, ...)
+#else
+void __attribute__((noreturn)) log_fatal(const char *fmt, ...)
+#endif
 {
     va_list ap;
 
     va_start(ap, fmt);
     log_format(&ll_fatal, fmt, ap);
     va_end(ap);
+#if PICO_ON_DEVICE
+    panic("stopped");
+#endif
 }
 
+#ifndef PICO_BUILD
 static int contains(const char *haystack, const char *needle)
 {
     size_t needle_len;
@@ -206,9 +230,11 @@ static void log_open_file(void) {
     if (path)
         al_destroy_path(path);
 }
+#endif
 
 void log_open(void)
 {
+#ifndef PICO_BUILD
     const char *to_file, *to_stderr, *to_msgbox;
     unsigned new_opt;
     const log_level_t **llp, *ll;
@@ -232,11 +258,14 @@ void log_open(void)
     log_options = new_opt;
     if (open_file)
         log_open_file();
+#endif
     log_debug("log_open: log options=%x", log_options);
 }
 
 void log_close(void)
 {
+#ifndef PICO_BUILD
     if (log_fp)
         fclose(log_fp);
+#endif
 }

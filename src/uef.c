@@ -1,7 +1,6 @@
 /*B-em v2.2 by Tom Walker
   UEF/HQ-UEF tape support*/
 
-#include <zlib.h>
 #include <stdio.h>
 #include "b-em.h"
 #include "sysacia.h"
@@ -9,10 +8,13 @@
 #include "uef.h"
 #include "tape.h"
 
-int tapelcount, tapellatch, pps;
+int uef_toneon = 0;
+#ifndef NO_USE_UEF
+#include <zlib.h>
+//int tapelcount, tapellatch;
+int pps;
 gzFile uef_f = NULL;
 
-int uef_toneon = 0;
 
 static int uef_inchunk = 0, uef_chunkid = 0, uef_chunklen = 0;
 static int uef_chunkpos = 0, uef_chunkdatabits = 8;
@@ -50,10 +52,10 @@ void uef_close()
         }
 }
 
-int infilenames = 0;
+static int infilenames = 0;
 int uefloop = 0;
-uint8_t fdat;
-int ffound;
+static uint8_t fdat;
+static int ffound;
 static void uef_receive(uint8_t val)
 {
         uef_toneon--;
@@ -395,3 +397,4 @@ void uef_findfilenames()
         uef_intone = bintone;
 }
 
+#endif

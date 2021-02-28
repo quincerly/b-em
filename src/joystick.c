@@ -11,6 +11,7 @@
 #include "keydef-allegro.h"
 #include <ctype.h>
 
+#ifndef NO_USE_JOYSTICK
 typedef struct {
     int   js_adc_chan;
     float js_scale;
@@ -405,3 +406,4 @@ void joystick_button_up(ALLEGRO_EVENT *event)
 {
     joystick_button(event, false, key_up);
 }
+#endif

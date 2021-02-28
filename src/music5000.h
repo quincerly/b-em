@@ -1,6 +1,7 @@
 #ifndef MUSIC5000_INC
 #define MUSIC5000_INC
 
+#ifndef NO_USE_MUSIC5000
 void music5000_init(ALLEGRO_EVENT_QUEUE *queue);
 void music5000_close(void);
 void music5000_loadstate(FILE *f);
@@ -13,5 +14,5 @@ FILE *music5000_rec_start(const char *fn);
 void music5000_rec_stop(void);
 
 extern FILE *music5000_fp;
-
+#endif
 #endif

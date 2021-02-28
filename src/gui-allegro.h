@@ -4,19 +4,23 @@
 typedef enum {
     IDM_ZERO,
     IDM_FILE_RESET,
+#ifndef NO_USE_SAVE_STATE
     IDM_FILE_LOAD_STATE,
     IDM_FILE_SAVE_STATE,
     IDM_FILE_SCREEN_SHOT,
     IDM_FILE_PRINT,
     IDM_FILE_M5000,
+#endif
     IDM_FILE_EXIT,
     IDM_EDIT_PASTE,
     IDM_EDIT_COPY,
     IDM_DISC_AUTOBOOT,
     IDM_DISC_LOAD,
     IDM_DISC_EJECT,
+#ifndef NO_USE_MMB
     IDM_DISC_MMB_LOAD,
     IDM_DISC_MMB_EJECT,
+#endif
     IDM_DISC_NEW_ADFS_S,
     IDM_DISC_NEW_ADFS_M,
     IDM_DISC_NEW_ADFS_L,
@@ -30,10 +34,16 @@ typedef enum {
     IDM_DISC_NEW_DFS_18S_INT_80T,
     IDM_DISC_WPROT,
     IDM_DISC_WPROT_D,
+#ifndef NO_USE_IDE
     IDM_DISC_HARD_IDE,
+#endif
+#ifndef NO_USE_SCSI
     IDM_DISC_HARD_SCSI,
+#endif
+#ifndef NO_USE_VDFS
     IDM_DISC_VDFS_ENABLE,
     IDM_DISC_VDFS_ROOT,
+#endif
     IDM_TAPE_LOAD,
     IDM_TAPE_REWIND,
     IDM_TAPE_EJECT,
@@ -44,8 +54,10 @@ typedef enum {
     IDM_ROMS_CLEAR,
     IDM_ROMS_RAM,
     IDM_MODEL,
+#ifndef NO_USE_TUBE
     IDM_TUBE,
     IDM_TUBE_SPEED,
+#endif
     IDM_VIDEO_DISPTYPE,
     IDM_VIDEO_PAL,
     IDM_VIDEO_BORDERS,
@@ -60,8 +72,10 @@ typedef enum {
     IDM_SOUND_TAPE,
     IDM_SOUND_FILTER,
     IDM_WAVE,
+#ifndef NO_USE_SID
     IDM_SID_TYPE,
     IDM_SID_METHOD,
+#endif
     IDM_DISC_TYPE,
     IDM_DISC_VOL,
 #ifdef HAVE_JACK_JACK_H
@@ -82,12 +96,18 @@ typedef enum {
 #endif
     IDM_KEY_REDEFINE,
     IDM_KEY_AS,
+#ifndef NO_USE_MOUSE
     IDM_MOUSE_AMX,
+#endif
     IDM_JOYMAP,
     IDM_SPEED,
+#ifndef NO_USE_DEBUGGER
     IDM_DEBUGGER,
+#ifndef NO_USE_TUBE
     IDM_DEBUG_TUBE,
-    IDM_DEBUG_BREAK
+#endif
+    IDM_DEBUG_BREAK,
+#endif
 } menu_id_t;
 
 extern void gui_allegro_init(ALLEGRO_EVENT_QUEUE *queue, ALLEGRO_DISPLAY *display);

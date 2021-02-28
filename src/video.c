@@ -36,6 +36,7 @@ uint16_t ma;
 static uint16_t maback;
 static int vdispen, dispen;
 static int crtc_mode;
+static int scrsize;
 
 void crtc_reset()
 {
@@ -1226,4 +1227,12 @@ void video_loadstate(FILE * f)
     vidclocks = getc(f) << 8;
     vidclocks = getc(f) << 16;
     vidclocks = getc(f) << 24;
+}
+
+void select_vidbank(bool shadow) {
+    vidbank = shadow ? 0x8000 : 0;
+}
+
+void set_scrsize(int s) {
+    scrsize = s;
 }

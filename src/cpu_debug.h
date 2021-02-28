@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+#ifndef NO_USE_DEBUGGER
 typedef struct {
   const char *cpu_name;                                               // Name/model of CPU.
   int      (*debug_enable)(int newvalue);                             // enable/disable debugging on this CPU, returns previous value.
@@ -30,4 +31,5 @@ extern void debug_iowrite (cpu_debug_t *cpu, uint32_t addr, uint32_t value, uint
 extern void debug_preexec (cpu_debug_t *cpu, uint32_t addr);
 extern void debug_trap    (cpu_debug_t *cpu, uint32_t addr, int reason);
 
+#endif
 #endif

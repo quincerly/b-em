@@ -1,6 +1,7 @@
 #ifndef __INC_TUBE_H
 #define __INC_TUBE_H
 
+#ifndef NO_USE_TUBE
 #include "savestate.h"
 #include <stdbool.h>
 
@@ -27,11 +28,13 @@ extern int tube_speed_num, tube_multipler;
 
 bool tube_32016_init(void *rom);
 
-uint8_t (*tube_readmem)(uint32_t addr);
-void (*tube_writemem)(uint32_t addr, uint8_t byte);
-void (*tube_exec)(void);
-void (*tube_proc_savestate)(ZFILE *zfp);
-void (*tube_proc_loadstate)(ZFILE *zfp);
+extern uint8_t (*tube_readmem)(uint32_t addr);
+extern void (*tube_writemem)(uint32_t addr, uint8_t byte);
+extern void (*tube_exec)(void);
+#ifndef NO_USE_SAVE_STATE
+extern void (*tube_proc_savestate)(ZFILE *zfp);
+extern void (*tube_proc_loadstate)(ZFILE *zfp);
+#endif
 
 extern int tubecycles;
 static inline void tubeUseCycles(int c) {tubecycles -= c;}
@@ -50,4 +53,5 @@ void tube_updatespeed(void);
 void tube_ula_savestate(FILE *f);
 void tube_ula_loadstate(FILE *f);
 
+#endif
 #endif

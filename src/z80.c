@@ -64,13 +64,16 @@ static inline uint8_t z80_do_readmem(uint16_t a)
     return z80ram[a];
 }
 
+#ifndef NO_USE_DEBUGGER
 cpu_debug_t tubez80_cpu_debug;
-
+#endif
 static inline uint8_t z80_readmem(uint16_t a)
 {
     uint8_t v = z80_do_readmem(a);
+#ifndef NO_USE_DEBUGGER
     if (dbg_tube_z80)
     debug_memread(&tubez80_cpu_debug, a, v, 1);
+#endif
     return v;
 }
 
@@ -88,8 +91,10 @@ static inline void z80_do_writemem(uint16_t a, uint8_t v)
 }
 
 static inline void z80_writemem(uint16_t a, uint8_t v) {
+#ifndef NO_USE_DEBUGGER
     if (dbg_tube_z80)
     debug_memwrite(&tubez80_cpu_debug, a, v, 1);
+#endif
     z80_do_writemem(a, v);
 }
 
@@ -101,7 +106,7 @@ static void dbg_z80_writemem(uint32_t addr, uint32_t value) {
     z80_writemem(addr & 0xffff, value);
 }
 
-int endtimeslice;
+extern int endtimeslice;
 static void z80out(uint16_t a, uint8_t v)
 {
         if ((a&0xFF)<8)
@@ -322,6 +327,8 @@ static void makeznptable()
         znptable16[0]|=0x40;
 }
 
+#ifndef NO_USE_DEBUGGER
+
 static int dbg_debug_enable(int newvalue) {
     int oldvalue = dbg_tube_z80;
     dbg_tube_z80 = newvalue;
@@ -420,6 +427,8 @@ cpu_debug_t tubez80_cpu_debug = {
     .get_instr_addr = dbg_z80_get_instr_addr
 };
 
+#endif
+
 void z80_close(void)
 {
     if (z80ram) {
@@ -428,6 +437,7 @@ void z80_close(void)
     }
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void z80_savestate(ZFILE *zfp)
 {
     unsigned char bytes[44];
@@ -492,6 +502,7 @@ static void z80_loadstate(ZFILE *zfp)
     savestate_zread(zfp, z80ram, sizeof z80ram);
     savestate_zread(zfp, z80rom, sizeof z80rom);
 }
+#endif
 
 bool z80_init(void *rom)
 {
@@ -507,8 +518,10 @@ bool z80_init(void *rom)
     tube_readmem = tube_z80_readmem;
     tube_writemem = tube_z80_writemem;
     tube_exec  = z80_exec;
+#ifndef NO_USE_SAVE_STATE
     tube_proc_savestate = z80_savestate;
     tube_proc_loadstate = z80_loadstate;
+#endif
     tube_type = TUBEZ80;
     z80_reset();
     return true;
@@ -552,8 +565,10 @@ void z80_exec()
                 opc=pc;
                 if ((tube_irq&1) && iff1) enterint=1;
                 cycles=0;
+#ifndef NO_USE_DEBUGGER
         if (dbg_tube_z80)
             debug_preexec(&tubez80_cpu_debug, pc);
+#endif
         tempc=af.b.l&C_FLAG;
                 opcode=z80_readmem(pc++);
                 ir.b.l=((ir.b.l+1)&0x7F)|(ir.b.l&0x80);

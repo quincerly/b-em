@@ -1,5 +1,7 @@
 /*B-em v2.2 by Tom Walker
-  Internal SN sound chip emulation*/
+  * Pico version (C) 2021 Graham Sanderson
+  *
+  * Internal SN sound chip emulation*/
 
 #include "b-em.h"
 #include "sid_b-em.h"
@@ -7,25 +9,61 @@
 #include "sound.h"
 #include "via.h"
 #include "uservia.h"
+#include "time.h"
 
+#ifdef PICO_BUILD
+#include "hardware/gpio.h"
+CU_REGISTER_DEBUG_PINS(sound_gen)
+//CU_SELECT_DEBUG_PINS(sound_gen)
+#else
+#define DEBUG_PINS_SET(x)
+#define DEBUG_PINS_CLR(x)
+#define DEBUG_PINS_XOR(x)
+#endif
 uint8_t sn_freqhi[4], sn_freqlo[4];
 uint8_t sn_vol[4];
 uint8_t sn_noise;
 static uint16_t sn_shift;
-static int lasttone;
+static int8_t lasttone;
 static int sn_count[4], sn_stat[4];
 uint32_t sn_latch[4];
 
-static int sn_rect_pos = 0,sn_rect_dir = 0;
+#ifndef PICO_BUILD
+static int sn_rect_pos = 0;
+static int sn_rect_dir = 0;
+#else
+#define SQUARE_ONLY_SOUND
+#endif
 
 int curwave = 0;
 
-static float volslog[16] =
-{
-	0.00000f, 0.59715f, 0.75180f, 0.94650f,
-        1.19145f, 1.50000f, 1.88835f, 2.37735f,
-        2.99295f, 3.76785f, 4.74345f, 5.97165f,
-        7.51785f, 9.46440f, 11.9194f, 15.0000f
+//static float volslog[16] =
+//{
+//	0.00000f, 0.59715f, 0.75180f, 0.94650f,
+//        1.19145f, 1.50000f, 1.88835f, 2.37735f,
+//        2.99295f, 3.76785f, 4.74345f, 5.97165f,
+//        7.51785f, 9.46440f, 11.9194f, 15.0000f
+//};
+
+int sn_volume = 127;
+
+static uint8_t volslog_int[16] = {
+        0,
+        10,
+        12,
+        16,
+        20,
+        25,
+        32,
+        40,
+        51,
+        64,
+        80,
+        101,
+        128,
+        161,
+        203,
+        255,
 };
 
 /*static int volume_table[16] = {
@@ -33,6 +71,7 @@ static float volslog[16] =
    5193,  4125,  3277,  2603,  2067,  1642,  1304,     0
 };*/
 
+#ifndef SQUARE_ONLY_SOUND
 static int16_t snwaves[5][32] =
 {
         {
@@ -62,21 +101,24 @@ static void sn_updaterectwave(int d)
         for ( ;c < 32; c++)     snwaves[4][c] = -127;
 }
 
+#endif
 
 
-
-void sn_fillbuf(int16_t *buffer, int len)
+void __time_critical_func(sn_fillbuf)(int16_t *buffer, int len)
 {
+#if PICO_ON_DEVICE
+    DEBUG_PINS_SET(sound_gen, 1);
+#endif
+#ifndef SQUARE_ONLY_SOUND
         int c, d;
         static int sidcount = 0;
-
         for (d = 0; d < len; d++)
         {
                 for (c = 0; c < 3; c++)
                 {
                         c++;
-                        if (sn_latch[c] > 256) buffer[d] += (int16_t) (snwaves[curwave][sn_stat[c]] * volslog[sn_vol[c]]);
-                        else                   buffer[d] += (int16_t) (volslog[sn_vol[c]] * 127);
+                        if (sn_latch[c] > 256) buffer[d] += (int16_t) (snwaves[curwave][sn_stat[c]] * volslog_int[sn_vol[c]])>>4u;
+                        else                   buffer[d] += (int16_t) (volslog_int[sn_vol[c]] * 127)>>4u;
 
                         sn_count[c] -= 8192;
                         while ((int)sn_count[c] < 0  && sn_latch[c])
@@ -89,10 +131,10 @@ void sn_fillbuf(int16_t *buffer, int len)
                 }
                 if (!(sn_noise & 4))
                 {
-                        if (curwave == 4) buffer[d] += (snwaves[4][sn_stat[0] & 31] * volslog[sn_vol[0]]);
-                        else              buffer[d] += (((sn_shift & 1) ^ 1) * 127 * volslog[sn_vol[0]] * 2);
+                        if (curwave == 4) buffer[d] += (snwaves[4][sn_stat[0] & 31] * volslog_int[sn_vol[0]])>>4u;
+                        else              buffer[d] += (((sn_shift & 1) ^ 1) * 127 * volslog_int[sn_vol[0]] * 2)>>4u;
                 }
-                else    buffer[d] += (((sn_shift & 1) ^ 1) * 127 * volslog[sn_vol[0]] * 2);
+                else    buffer[d] += (((sn_shift & 1) ^ 1) * 127 * (volslog_int[sn_vol[0]] * 2)) >> 4u;
 
                 sn_count[0] -= 512;
                 while ((int)sn_count[0] < 0 && sn_latch[0])
@@ -118,6 +160,7 @@ void sn_fillbuf(int16_t *buffer, int len)
                    sn_stat[0] &= 32767;
 //                buffer[d] += (lpt_dac * 32);
 
+#ifndef PICO_BUILD
                 sidcount++;
                 if (sidcount == 624)
                 {
@@ -134,18 +177,95 @@ void sn_fillbuf(int16_t *buffer, int len)
                         }
                         sn_updaterectwave(sn_rect_pos);
                 }
+#endif
         }
+#else
+    int c, d;
+    for (c = 1; c < 4; c++) {
+        int period = sn_latch[c];
+        int16_t vol = (volslog_int[sn_vol[c]] * sn_volume) >> 4u;
+        if (period <= 256) {
+            for (d = 0; d < len; d++)
+                buffer[d] += vol;
+        } else {
+            int evol = sn_stat[c] & 16 ? -vol : vol;
+            for (d = 0; d < len; d++) {
+                buffer[d] += evol;
+                sn_count[c] -= 8192;
+                if ((int) sn_count[c] < 0) {
+                    while ((int) sn_count[c] < 0) {
+                        sn_count[c] += period;
+                        sn_stat[c]++;
+                    }
+                    sn_stat[c] &= 31;
+                    evol = sn_stat[c] & 16 ? -vol : vol;
+                }
+            }
+        }
+    }
+    if (!(sn_noise & 4)) {
+        for (d = 0; d < len; d++) {
+            buffer[d] += (((sn_shift & 1) ^ 1) * sn_volume * volslog_int[sn_vol[0]] * 2)>>4u;
+
+            sn_count[0] -= 512;
+            while ((int)sn_count[0] < 0 && sn_latch[0])
+            {
+                sn_count[0] += (sn_latch[0] * 2);
+                if (!(sn_noise & 4))
+                {
+                    if (sn_shift & 1) sn_shift |= 0x8000;
+                    sn_shift >>= 1;
+                }
+                else
+                {
+                    if ((sn_shift & 1) ^ ((sn_shift >> 1) & 1)) sn_shift |= 0x8000;
+                    sn_shift >>= 1;
+                }
+                sn_stat[0]++;
+            }
+            while (sn_stat[0] >= 30) sn_stat[0] -= 30;
+        }
+    } else {
+        int vol = sn_volume * (volslog_int[sn_vol[0]] * 2);
+        for (d = 0; d < len; d++) {
+            buffer[d] += (((sn_shift & 1) ^ 1) * vol) >> 4u;
+
+            sn_count[0] -= 512;
+            while ((int)sn_count[0] < 0 && sn_latch[0])
+            {
+                sn_count[0] += (sn_latch[0] * 2);
+                if (!(sn_noise & 4))
+                {
+                    if (sn_shift & 1) sn_shift |= 0x8000;
+                    sn_shift >>= 1;
+                }
+                else
+                {
+                    if ((sn_shift & 1) ^ ((sn_shift >> 1) & 1)) sn_shift |= 0x8000;
+                    sn_shift >>= 1;
+                }
+                sn_stat[0]++;
+            }
+            sn_stat[0] &= 32767;
+        }
+
+    }
+#endif
+#if PICO_ON_DEVICE
+    DEBUG_PINS_CLR(sound_gen, 1);
+#endif
 }
 
 void sn_init()
 {
+#ifndef SQUARE_ONLY_SOUND
         int c;
 //        for (c = 0; c < 16; c++)
 //            volslog[c] = (float)volume_table[15 - c] / 2048.0;
 
         for (c = 0; c < 32; c++)
             snwaves[3][c] -= 128;
-
+#endif
 
         sn_latch[0] = sn_latch[1] = sn_latch[2] = sn_latch[3] = 0x3FF << 6;
         sn_vol[0] = 0;
@@ -160,7 +280,7 @@ void sn_init()
 }
 
 static uint8_t firstdat;
-void sn_write(uint8_t data)
+void sn_handle_write(uint8_t data)
 {
         int freq;
 
@@ -230,7 +350,7 @@ void sn_write(uint8_t data)
 }
 
 
-
+#ifndef NO_USE_SAVE_STATE
 void sn_savestate(FILE *f)
 {
         fwrite(sn_latch, 16, 1, f);
@@ -250,3 +370,26 @@ void sn_loadstate(FILE *f)
         sn_noise = getc(f);
         sn_shift = getc(f); sn_shift |= getc(f) << 8;
 }
+#endif
+
+void sn_setvolume(uint8_t vol) {
+    sn_volume = vol;
+}
+
+#ifndef USE_CORE1_SOUND
+void sn_write(uint8_t data) {
+    sound_cycle_sync();
+    sn_handle_write(data);
+}
+#else
+#include "display.h"
+void sn_write(uint8_t data) {
+    uint offset = sound_cycle_sync();
+    assert(offset < 128);
+    sound_record_word(REC_SN_76489, data | (offset << 8));
+}
+
+void sn76489_sound_event(uint event) {
+    sn_handle_write(event);
+}
+#endif

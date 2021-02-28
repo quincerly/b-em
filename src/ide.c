@@ -4,6 +4,7 @@
 #include "b-em.h"
 #include "ide.h"
 
+#ifndef NO_USE_IDE
 bool ide_enable;
 int ide_count;
 
@@ -336,3 +337,4 @@ void ide_callback()
                 return;
         }
 }
+#endif

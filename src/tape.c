@@ -5,6 +5,7 @@
 #include "uef.h"
 #include "csw.h"
 
+#ifndef NO_USE_TAPE
 int tapelcount,tapellatch;
 
 bool tape_loaded = false;
@@ -19,8 +20,12 @@ static struct
 }
 loaders[]=
 {
+#ifndef NO_USE_UEF
         {"UEF", uef_load, uef_close},
+#endif
+#ifndef NO_USE_CSW
         {"CSW", csw_load, csw_close},
+#endif
         {0,0,0}
 };
 
@@ -65,8 +70,14 @@ static uint16_t newdat;
 
 void tape_poll(void) {
     if (motor) {
-        if (csw_ena) csw_poll();
-        else         uef_poll();
+        do {
+#ifndef NO_USE_CSW
+            if (csw_ena) { csw_poll(); break; }
+#endif
+#ifndef NO_USE_UEF
+            uef_poll();
+#endif
+        } while (false);
 
         if (newdat & 0x100) {
             newdat&=0xFF;
@@ -80,3 +91,4 @@ void tape_poll(void) {
 void tape_receive(ACIA *acia, uint8_t data) {
     newdat = data | 0x100;
 }
+#endif

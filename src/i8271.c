@@ -10,6 +10,7 @@
 #include "disc.h"
 #include "model.h"
 
+#ifndef NO_USE_I8271
 void i8271_callback();
 void i8271_data(uint8_t dat);
 void i8271_spindown();
@@ -58,12 +59,14 @@ void i8271_reset()
                 fdc_headercrcerror = i8271_headercrcerror;
                 fdc_writeprotect   = i8271_writeprotect;
                 fdc_getdata        = i8271_getdata;
-                motorspin = 45000;
+                set_motorspin(45000);
+        } else {
+            set_motorspin(0);
         }
         i8271.paramnum = i8271.paramreq = 0;
         i8271.status = 0;
 //        printf("Reset 8271\n");
-        fdc_time = 0;
+        set_fdc_time(0);
         i8271.curtrack[0] = i8271.curtrack[1] = 0;
         i8271.command = 0xFF;
         i8271.realtrack[0] = i8271.realtrack[1] = 0;
@@ -73,10 +76,10 @@ static void i8271_NMI()
 {
         if (i8271.status & 8)
         {
-                nmi = 1;
+                nmi_set_mask(1);
 //                printf("NMI\n");
         }
-        else                nmi = 0;
+        else                nmi_clr_all(0);
 }
 
 
@@ -84,7 +87,7 @@ void i8271_spinup()
 {
     if (!motoron) {
         motoron = 1;
-        motorspin = 0;
+        set_motorspin(0);
         ddnoise_spinup();
     }
 }
@@ -100,13 +103,13 @@ void i8271_spindown()
 
 void i8271_setspindown()
 {
-    motorspin = 45000;
+    set_motorspin(45000);
 }
 
 static void short_spindown(void)
 {
-    motorspin = 15000;
-    fdc_time = 0;
+    set_motorspin(15000);
+    set_fdc_time(0);
 }
 
 int params[][2]=
@@ -135,10 +138,10 @@ uint8_t i8271_read(uint16_t addr)
         switch (addr & 7)
         {
             case 0: /*Status register*/
-                log_debug("i8271: Read status reg %04X %02X\n",pc,i8271.status);
+                log_debug("i8271: Read status reg %04X %02X\n",get_pc(),i8271.status);
                 return i8271.status;
             case 1: /*Result register*/
-                log_debug("i8271: Read result reg %04X %02X\n",pc,i8271.result);
+                log_debug("i8271: Read result reg %04X %02X\n",get_pc(),i8271.result);
                 i8271.status &= ~0x18;
                 i8271_NMI();
   //              output=1; timetolive=50;
@@ -199,7 +202,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271.result = 0x18;
                                 i8271.status = 0x18;
                                 i8271_NMI();
-                                fdc_time = 0;
+                                set_fdc_time(0);
                                 break;
 //                                printf("Unknown 8271 command %02X 3\n",i8271.command);
 //                                dumpregs();
@@ -221,7 +224,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271_spinup();
                                 i8271.phase = 0;
                                 if (i8271.curtrack[curdrive] != i8271.params[0]) i8271_seek();
-                                else                                             fdc_time = 200;
+                                else                                             set_fdc_time(200);
                                 break;
                             case 0x13: /*Read sector*/
                                 i8271.sectorsleft = i8271.params[2] & 31;
@@ -229,7 +232,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271_spinup();
                                 i8271.phase = 0;
                                 if (i8271.curtrack[curdrive] != i8271.params[0]) i8271_seek();
-                                else                                             fdc_time = 200;
+                                else                                             set_fdc_time(200);
                                 break;
                             case 0x1F: /*Verify sector*/
                                 i8271.sectorsleft = i8271.params[2] & 31;
@@ -237,7 +240,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271_spinup();
                                 i8271.phase = 0;
                                 if (i8271.curtrack[curdrive] != i8271.params[0]) i8271_seek();
-                                else                                             fdc_time = 200;
+                                else                                             set_fdc_time(200);
                                 i8271_verify = 1;
                                 break;
                             case 0x1B: /*Read ID*/
@@ -246,13 +249,13 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271_spinup();
                                 i8271.phase = 0;
                                 if (i8271.curtrack[curdrive] != i8271.params[0]) i8271_seek();
-                                else                                             fdc_time = 200;
+                                else                                             set_fdc_time(200);
                                 break;
                             case 0x23: /*Format track*/
                                 i8271_spinup();
                                 i8271.phase = 0;
                                 if (i8271.curtrack[curdrive] != i8271.params[0]) i8271_seek();
-                                else                                             fdc_time = 200;
+                                else                                             set_fdc_time(200);
                                 break;
                                 break;
                             case 0x29: /*Seek*/
@@ -276,7 +279,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                         i8271.result = 0x18;
                                         i8271.status = 0x18;
                                         i8271_NMI();
-                                        fdc_time = 0;
+                                        set_fdc_time(0);
                                         break;
 //                                        default:
 //                                        printf("8271 Write bad special register %02X\n",i8271.params[0]);
@@ -297,7 +300,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                         i8271.result = 0x18;
                                         i8271.status = 0x18;
                                         i8271_NMI();
-                                        fdc_time = 0;
+                                        set_fdc_time(0);
                                         break;
 //                                        default:
 //                                        printf("8271 Read bad special register %02X\n",i8271.params[0]);
@@ -310,7 +313,7 @@ void i8271_write(uint16_t addr, uint8_t val)
                                 i8271.result = 0x18;
                                 i8271.status = 0x18;
                                 i8271_NMI();
-                                fdc_time = 0;
+                                set_fdc_time(0);
                                 break;
 //                                printf("Unknown 8271 command %02X 2\n",i8271.command);
 //                                dumpregs();
@@ -334,7 +337,7 @@ void i8271_write(uint16_t addr, uint8_t val)
 
 void i8271_callback()
 {
-        fdc_time = 0;
+        set_fdc_time(0);
 //        printf("Callback 8271 - command %02X\n",i8271.command);
         switch (i8271.command)
         {
@@ -481,7 +484,7 @@ void i8271_data(uint8_t dat)
 
 void i8271_finishread()
 {
-        fdc_time = 200;
+        set_fdc_time(200);
 }
 
 void i8271_notfound()
@@ -533,3 +536,4 @@ void i8271_writeprotect()
         i8271_NMI();
         short_spindown();
 }
+#endif

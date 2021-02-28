@@ -24,7 +24,7 @@ x_fopen(const char *path, const char *mode)
 
 			exit(-1);
 		}
-		log_error(err);
+		log_error("%s", err);
 		free(err);
 		exit(-1);
 	}

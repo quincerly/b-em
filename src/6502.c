@@ -1,5 +1,7 @@
-/*B-em v2.2 by Tom Walker
-  6502/65c02 host CPU emulation*/
+/* B-em v2.2 by Tom Walker
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * 6502/65c02 host CPU emulation*/
 
 #include "b-em.h"
 
@@ -35,9 +37,11 @@ static int dbg_debug_enable(int newvalue) {
     return oldvalue;
 };
 
-uint8_t a, x, y, s;
-uint16_t pc;
-PREG p;
+static uint8_t a, x, y, s;
+static uint16_t pc;
+static PREG p;
+
+uint8_t opcode;
 
 static inline uint8_t pack_flags(uint8_t flags) {
     if (p.c)
@@ -64,6 +68,7 @@ static inline void unpack_flags(uint8_t flags) {
     p.n = flags & 0x80;
 }
 
+#ifndef NO_USE_DEBUGGER
 static uint32_t dbg_reg_get(int which) {
     switch (which)
     {
@@ -128,17 +133,21 @@ static void dbg_reg_parse(int which, const char *str) {
     uint32_t value = strtol(str, NULL, 16);
     dbg_reg_set(which, value);
 }
+#endif
 
 static uint32_t do_readmem(uint32_t addr);
 static void     do_writemem(uint32_t addr, uint32_t val);
 static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize);
 
+#ifndef NO_USE_DEBUGGER
 static uint32_t dbg_get_instr_addr() {
     return oldpc;
 }
+#endif
 
 static const char *trap_names[] = { "BRK", NULL };
 
+#ifndef NO_USE_DEBUGGER
 cpu_debug_t core6502_cpu_debug = {
     .cpu_name       = "core6502",
     .debug_enable   = dbg_debug_enable,
@@ -157,6 +166,7 @@ cpu_debug_t core6502_cpu_debug = {
 static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize) {
   return dbg6502_disassemble(&core6502_cpu_debug, addr, buf, bufsize, x65c02 ? M65C02 : M6502);
 }
+#endif
 
 int tubecycle;
 
@@ -194,7 +204,12 @@ static int FEslowdown[8] = { 1, 0, 1, 1, 0, 0, 1, 0 };
 static int RAMbank[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 static uint8_t *memlook[2][256];
-static int memstat[2][256];
+static enum {
+    HW = 0,
+    RAM = 1,
+    ROM = 2
+} memstat[2][256];
+
 static int vis20k = 0;
 
 static uint8_t acccon;
@@ -268,13 +283,17 @@ static void os_paste_cnpv(void)
 
 static inline void fetch_opcode(void)
 {
+#ifndef NO_USE_DEBUGGER
     pc3 = oldoldpc;
     oldoldpc = oldpc;
     oldpc = pc;
+#endif
     vis20k = RAMbank[pc >> 12];
 
+#ifndef NO_USE_DEBUGGER
     if (dbg_core6502)
         debug_preexec(&core6502_cpu_debug, pc);
+#endif
     if (pc == buf_remv && x == 0 && clip_paste_ptr)
         os_paste_remv();
     else if (pc == buf_cnpv && x == 0 && clip_paste_ptr)
@@ -295,12 +314,14 @@ static uint32_t do_readmem(uint32_t addr)
         if (addr >= 0x10000)
             return 0xFF;
 
+#ifndef NO_USE_DEBUGGER
         if (pc == addr)
             fetchc[addr] = 31;
         else
             readc[addr] = 31;
+#endif
 
-        if (memstat[vis20k][addr >> 8])
+        if (memstat[vis20k][addr >> 8] != HW)
                 return memlook[vis20k][addr >> 8][addr];
         if (MASTER && (acccon & 0x40) && addr >= 0xFC00)
                 return os[addr & 0x3FFF];
@@ -313,11 +334,14 @@ static uint32_t do_readmem(uint32_t addr)
         }
 
         switch (addr & ~3) {
+#ifndef NO_USE_MUSIC5000
             case 0xFC08:
             case 0xFC0C:
                 if (sound_music5000)
                     return music2000_read(addr);
                 break;
+#endif
+#ifndef NO_USE_SID
         case 0xFC20:
         case 0xFC24:
         case 0xFC28:
@@ -329,7 +353,8 @@ static uint32_t do_readmem(uint32_t addr)
                 if (sound_beebsid)
                         return sid_read(addr);
                 break;
-
+#endif
+#ifndef NO_USE_SCSI
         case 0xFC40:
         case 0xFC44:
         case 0xFC48:
@@ -342,10 +367,12 @@ static uint32_t do_readmem(uint32_t addr)
                 if (ide_enable)
                         return ide_read(addr);
                 break;
-
+#endif
+#ifndef NO_USE_VDFS
         case 0xFC5C:
                 return vdfs_read(addr);
                 break;
+#endif
 
         case 0xFE00:
         case 0xFE04:
@@ -359,11 +386,12 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFE14:
                 return serial_read(addr);
 
+#ifndef NO_USE_ADC
         case 0xFE18:
                 if (MASTER)
                         return adc_read(addr);
                 break;
-
+#endif
         case 0xFE24:
         case 0xFE28:
                 if (MASTER)
@@ -407,13 +435,16 @@ static uint32_t do_readmem(uint32_t addr)
                 case FDC_NONE:
                 case FDC_MASTER:
                     break;
+#ifndef NO_USE_I8271
                 case FDC_I8271:
                     return i8271_read(addr);
+#endif
                 default:
                     return wd1770_read(addr);
             }
             break;
 
+#ifndef NO_USE_ADC
         case 0xFEC0:
         case 0xFEC4:
         case 0xFEC8:
@@ -425,7 +456,8 @@ static uint32_t do_readmem(uint32_t addr)
                 if (!MASTER)
                         return adc_read(addr);
                 break;
-
+#endif
+#ifndef NO_USE_TUBE
         case 0xFEE0:
         case 0xFEE4:
         case 0xFEE8:
@@ -435,6 +467,7 @@ static uint32_t do_readmem(uint32_t addr)
         case 0xFEF8:
         case 0xFEFC:
                 return tube_host_read(addr);
+#endif
         }
         if (addr >= 0xFC00 && addr < 0xFE00)
                 return 0xFF;
@@ -444,8 +477,10 @@ static uint32_t do_readmem(uint32_t addr)
 uint8_t readmem(uint16_t addr)
 {
     uint32_t value = do_readmem(addr);
+#ifndef NO_USE_DEBUGGER
     if (dbg_core6502)
     debug_memread(&core6502_cpu_debug, addr, value, 1);
+#endif
     return value;
 }
 
@@ -456,10 +491,12 @@ static void do_writemem(uint32_t addr, uint32_t val)
         if (addr >= 0x10000)
             return;
 
+#ifndef NO_USE_DEBUGGER
         writec[addr] = 31;
+#endif
 
         c = memstat[vis20k][addr >> 8];
-        if (c == 1) {
+        if (c == RAM) {
                 memlook[vis20k][addr >> 8][addr] = val;
                 switch(addr) {
                     case 0x022c:
@@ -476,7 +513,7 @@ static void do_writemem(uint32_t addr, uint32_t val)
                         break;
                 }
                 return;
-        } else if (c == 2) {
+        } else if (c == ROM) {
                 log_debug("6502: attempt to write to ROM %x:%04x=%02x\n", vis20k, addr, val);
                 return;
         }
@@ -490,19 +527,24 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 }
         }
 
+#ifndef NO_USE_MUSIC5000
         if (sound_music5000) {
            if (addr >= 0xFCFF && addr <= 0xFDFF) {
               music5000_write(addr, val);
               return;
            }
         }
+#endif
 
         switch (addr & ~3) {
+#ifndef NO_USE_MUSIC5000
             case 0xFC08:
             case 0xFC0C:
                 if (sound_music5000)
                     music2000_write(addr, val);
                 break;
+#endif
+#ifndef NO_USE_SID
         case 0xFC20:
         case 0xFC24:
         case 0xFC28:
@@ -514,6 +556,7 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 if (sound_beebsid)
                         sid_write(addr, val);
                 break;
+#endif
 
         case 0xFC40:
         case 0xFC44:
@@ -522,15 +565,22 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFC50:
         case 0xFC54:
         case 0xFC58:
-                if (scsi_enabled)
-                        scsi_write(addr, val);
-                else if (ide_enable)
+#ifndef NO_USE_SCSI
+                if (scsi_enabled) {
+                    scsi_write(addr, val);
+                    break;
+                }
+#endif
+#ifndef NO_USE_IDE
+                if (ide_enable)
                         ide_write(addr, val);
+#endif
                 break;
-
+#ifndef NO_USE_VDFS
         case 0xFC5C:
                 vdfs_write(addr, val);
                 break;
+#endif
 
         case 0xFE00:
         case 0xFE04:
@@ -547,11 +597,12 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 serial_write(addr, val);
                 break;
 
+#ifndef NO_USE_ADC
         case 0xFE18:
                 if (MASTER)
                         adc_write(addr, val);
                 break;
-
+#endif
         case 0xFE20:
                 videoula_write(addr, val);
                 break;
@@ -571,10 +622,10 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFE30:
                 ram_fe30 = val;
                 for (c = 128; c < 192; c++)
-                        memlook[0][c] = memlook[1][c] =
-                            &rom[(val & 15) << 14] - 0x8000;
+                        memlook[0][c] = memlook[1][c] = rom_slot_ptr(val&15) - 0x8000;
+//                            &rom[(val & 15) << 14] - 0x8000;
                 for (c = 128; c < 192; c++)
-                        memstat[0][c] = memstat[1][c] = rom_slots[val & 15].swram ? 1 : 2;
+                        memstat[0][c] = memstat[1][c] = rom_slots[val & 15].swram ? RAM : ROM;
                 romsel = (val & 15) << 14;
                 ram4k = ((val & 0x80) && MASTER);
                 ram12k = ((val & 0x80) && BPLUS);
@@ -583,13 +634,13 @@ static void do_writemem(uint32_t addr, uint32_t val)
                         for (c = 128; c < 144; c++)
                                 memlook[0][c] = memlook[1][c] = ram;
                         for (c = 128; c < 144; c++)
-                                memstat[0][c] = memstat[1][c] = 1;
+                                memstat[0][c] = memstat[1][c] = RAM;
                 }
                 if (ram12k) {
                         for (c = 128; c < 176; c++)
                                 memlook[0][c] = memlook[1][c] = ram;
                         for (c = 128; c < 176; c++)
-                                memstat[0][c] = memstat[1][c] = 1;
+                                memstat[0][c] = memstat[1][c] = RAM;
                 }
                 break;
 
@@ -597,7 +648,7 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 ram_fe34 = val;
                 if (BPLUS) {
                         acccon = val;
-                        vidbank = (val & 0x80) << 8;
+                        select_vidbank((val & 0x80) != 0);
                         if (val & 0x80)
                                 RAMbank[0xC] = RAMbank[0xD] = 1;
                         else
@@ -607,7 +658,7 @@ static void do_writemem(uint32_t addr, uint32_t val)
                         acccon = val;
                         ram8k = (val & 8);
                         ram20k = (val & 4);
-                        vidbank = (val & 1) ? 0x8000 : 0;
+                        select_vidbank(val & 1);
                         if (val & 2)
                                 RAMbank[0xC] = RAMbank[0xD] = 1;
                         else
@@ -619,13 +670,13 @@ static void do_writemem(uint32_t addr, uint32_t val)
                                         memlook[0][c] = memlook[1][c] =
                                             ram - 0x3000;
                                 for (c = 192; c < 224; c++)
-                                        memstat[0][c] = memstat[1][c] = 1;
+                                        memstat[0][c] = memstat[1][c] = RAM;
                         } else {
                                 for (c = 192; c < 224; c++)
                                         memlook[0][c] = memlook[1][c] =
                                             os - 0xC000;
                                 for (c = 192; c < 224; c++)
-                                        memstat[0][c] = memstat[1][c] = 2;
+                                        memstat[0][c] = memstat[1][c] = ROM;
                         }
                 }
                 break;
@@ -664,14 +715,16 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 case FDC_NONE:
                 case FDC_MASTER:
                     break;
+#ifndef NO_USE_I8271
                 case FDC_I8271:
                     i8271_write(addr, val);
                     break;
+#endif
                 default:
                     wd1770_write(addr, val);
             }
             break;
-
+#ifndef NO_USE_ADC
         case 0xFEC0:
         case 0xFEC4:
         case 0xFEC8:
@@ -683,7 +736,8 @@ static void do_writemem(uint32_t addr, uint32_t val)
                 if (!MASTER)
                         adc_write(addr, val);
                 break;
-
+#endif
+#ifndef NO_USE_TUBE
         case 0xFEE0:
         case 0xFEE4:
         case 0xFEE8:
@@ -694,20 +748,23 @@ static void do_writemem(uint32_t addr, uint32_t val)
         case 0xFEFC:
                 tube_host_write(addr, val);
                 break;
+#endif
         }
 }
 
 void writemem(uint16_t addr, uint8_t val)
 {
+#ifndef NO_USE_DEBUGGER
     if (dbg_core6502)
     debug_memwrite(&core6502_cpu_debug, addr, val, 1);
+#endif
     do_writemem(addr, val);
 }
 
-int nmi, oldnmi, interrupt, takeint;
+int nmi, oldnmi, takeint;
+static int interrupt;
 
 uint16_t pc3, oldpc, oldoldpc;
-uint8_t opcode;
 
 void m6502_reset()
 {
@@ -715,9 +772,9 @@ void m6502_reset()
         for (c = 0; c < 16; c++)
                 RAMbank[c] = 0;
         for (c = 0; c < 128; c++)
-                memstat[0][c] = memstat[1][c] = 1;
+                memstat[0][c] = memstat[1][c] = RAM;
         for (c = 128; c < 256; c++)
-                memstat[0][c] = memstat[1][c] = 2;
+                memstat[0][c] = memstat[1][c] = ROM;
         for (c = 0; c < 128; c++)
                 memlook[0][c] = memlook[1][c] = ram;
         if (MODELA) {
@@ -727,11 +784,11 @@ void m6502_reset()
         for (c = 48; c < 128; c++)
                 memlook[1][c] = ram + 32768;
         for (c = 128; c < 192; c++)
-                memlook[0][c] = memlook[1][c] = rom - 0x8000;
+                memlook[0][c] = memlook[1][c] = rom_slot_ptr(0) - 0x8000;
         for (c = 192; c < 256; c++)
                 memlook[0][c] = memlook[1][c] = os - 0xC000;
-        memstat[0][0xFC] = memstat[0][0xFD] = memstat[0][0xFE] = 0;
-        memstat[1][0xFC] = memstat[1][0xFD] = memstat[1][0xFE] = 0;
+        memstat[0][0xFC] = memstat[0][0xFD] = memstat[0][0xFE] = HW;
+        memstat[1][0xFC] = memstat[1][0xFD] = memstat[1][0xFE] = HW;
 
         cycles = 0;
         ram4k = ram8k = ram12k = ram20k = 0;
@@ -740,7 +797,10 @@ void m6502_reset()
         p.i = 1;
         nmi = oldnmi = 0;
         output = 0;
-        tubecycle = tubecycles = 0;
+        tubecycle = 0;
+#ifndef NO_USE_TUBE
+        tubecycles = 0;
+#endif
         log_debug("PC : %04X\n", pc);
 }
 
@@ -766,8 +826,10 @@ static inline uint16_t getsw()
 static void otherstuff_poll(void) {
     otherstuffcount += 128;
     acia_poll(&sysacia);
+#ifndef NO_USE_MUSIC5000
     if (sound_music5000)
         music2000_poll();
+#endif
     sound_poll();
     if (!tapelcount) {
         tape_poll();
@@ -779,21 +841,27 @@ static void otherstuff_poll(void) {
         if (!motorspin)
             fdc_spindown();
     }
+#ifndef NO_USE_IDE
     if (ide_count) {
         ide_count -= 200;
         if (ide_count <= 0)
             ide_callback();
     }
+#endif
+#ifndef NO_USE_ADC
     if (adc_time) {
         adc_time--;
         if (!adc_time)
             adc_poll();
     }
+#endif
+#ifndef NO_USE_MOUSE
     mcount--;
     if (!mcount) {
         mcount = 6;
         mouse_poll();
     }
+#endif
 }
 
 #define getw() getsw()
@@ -935,6 +1003,10 @@ static inline void sbc_cmos(uint8_t temp)
     int16_t tempw;
 
     if (p.d) {
+        if (a == 0 && temp == 11 && !p.c) {
+            printf("waloomera\n");
+        }
+
         al = (a & 15) - (temp & 15) - (p.c ? 0 : 1);
         tempw = a-temp-(p.c ? 0 : 1);
         tempv = (signed char)a -(signed char)temp-(p.c ? 0 : 1);
@@ -970,7 +1042,16 @@ static void branchcycles(int temp)
         }
 }
 
-void m6502_exec()
+void m6502_init()
+{
+}
+
+int32_t get_cpu_timestamp() {
+    extern int framesrun;
+    return 40000 * (framesrun - 1) + (40000 - cycles);
+}
+
+    void m6502_exec()
 {
         uint16_t addr;
         uint8_t temp;
@@ -979,11 +1060,13 @@ void m6502_exec()
         cycles += 40000;
 
         while (cycles > 0) {
-                fetch_opcode();
+            fetch_opcode();
                 switch (opcode) {
                 case 0x00:      /* BRK */
+#ifndef NO_USE_DEBUGGER
                         if (dbg_core6502)
                             debug_trap(&core6502_cpu_debug, oldpc, 0);
+#endif
                         pc++;
                         push(pc >> 8);
                         push(pc & 0xFF);
@@ -3716,6 +3799,7 @@ void m6502_exec()
                         interrupt &= ~128;
                         takeint = 0;
 //                        skipint=0;
+
                         push(pc >> 8);
                         push(pc & 0xFF);
                         push(pack_flags(0x20));
@@ -3728,12 +3812,14 @@ void m6502_exec()
 
                 if (otherstuffcount <= 0)
                     otherstuff_poll();
+#ifndef NO_USE_TUBE
                 if (tube_exec && tubecycle) {
                         tubecycles += (tubecycle * tube_multipler) >> 1;
                         if (tubecycles > 3)
                                 tube_exec();
                         tubecycle = 0;
                 }
+#endif
 
                 if (nmi && !oldnmi) {
                         push(pc >> 8);
@@ -3759,11 +3845,16 @@ void m65c02_exec()
 //        log_debug("PC = %04X\n",pc);
 //        log_debug("Exec cycles %i\n",cycles);
         while (cycles > 0) {
+#ifdef PRINT_INSTRUCTIONS
+            print_instructions();
+#endif
                 fetch_opcode();
                 switch (opcode) {
                 case 0x00:      /* BRK */
+#ifndef NO_USE_DEBUGGER
                         if (dbg_core6502)
                             debug_trap(&core6502_cpu_debug, oldpc, 0);
+#endif
                         pc++;
                         push(pc >> 8);
                         push(pc & 0xFF);
@@ -4590,7 +4681,7 @@ void m65c02_exec()
                         addr = readmem(pc);
                         pc++;
                         writemem((addr + x) & 0xFF, 0);
-                        polltime(3);
+                        polltime(4);
                         break;
 
                 case 0x75:      /*ADC zp,x */
@@ -4791,7 +4882,7 @@ void m65c02_exec()
                         pc++;
                         addr = read_zp_indirect(temp);
                         writemem(addr, a);
-                        polltime(6);
+                        polltime(5);
                         break;
 
                 case 0x94:      /*STY zp,x */
@@ -5564,6 +5655,7 @@ void m65c02_exec()
 //                        printf("INT\n");
                 }
                 interrupt &= ~128;
+#ifndef NO_USE_TUBE
                 if (tube_exec && tubecycle) {
 //                        log_debug("tubeexec %i %i %i\n",tubecycles,tubecycle,tube_shift);
                         tubecycles += (tubecycle * tube_multipler) >> 1;
@@ -5571,6 +5663,7 @@ void m65c02_exec()
                                 tube_exec();
                         tubecycle = 0;
                 }
+#endif
 
                 if (otherstuffcount <= 0)
                     otherstuff_poll();
@@ -5627,4 +5720,91 @@ void m6502_loadstate(FILE * f)
         cycles |= (getc(f) << 8);
         cycles |= (getc(f) << 16);
         cycles |= (getc(f) << 24);
+}
+
+uint8_t get_a() {
+    return a;
+}
+
+void set_a(uint8_t _a) {
+    a = _a;
+}
+
+uint8_t get_x() {
+    return x;
+}
+
+void set_x(uint8_t _x) {
+    x = _x;
+}
+
+uint8_t get_y() {
+    return y;
+}
+
+void set_y(uint8_t _y) {
+    y = _y;
+}
+
+int get_c() {
+    return p.c;
+}
+
+void set_c(int c) {
+    p.c = c;
+}
+
+int get_z() {
+    return p.z;
+}
+
+void set_z(int z) {
+    p.z = z;
+}
+
+uint16_t get_pc() {
+    return pc;
+}
+
+void set_pc(uint16_t _pc) {
+    //printf("set_pc %04x\n", _pc);
+    pc = _pc;
+}
+
+int get_n() {
+    return p.n;
+}
+
+int get_v() {
+    return p.v;
+}
+
+int get_d() {
+    return p.d;
+}
+
+int get_i() {
+    return p.i;
+}
+
+void nmi_set_mask(uint mask) {
+//    printf("NMI SET MASK %d\n", get_cpu_timestamp());
+    nmi |= mask;
+}
+
+void nmi_clr_mask(uint mask) {
+    nmi &= ~mask;
+}
+
+void nmi_set(uint val) {
+//    printf("NMI SET %d\n", get_cpu_timestamp());
+    nmi = val;
+}
+
+void interrupt_set_mask(uint mask) {
+    interrupt |= mask;
+}
+
+void interrupt_clr_mask(uint mask) {
+    interrupt &= ~mask;
 }

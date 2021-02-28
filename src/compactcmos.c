@@ -4,6 +4,7 @@
 #include "b-em.h"
 #include "model.h"
 
+#ifndef NO_USE_COMPACT
 int i2c_clock = 1, i2c_data = 1;
 
 static int cmos_state = 0;
@@ -236,3 +237,4 @@ void compactcmos_i2cchange(int nuclock, int nudata)
         lastdata = nudata;
         i2c_clock = nuclock;
 }
+#endif

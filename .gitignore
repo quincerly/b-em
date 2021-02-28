@@ -44,4 +44,5 @@ b-em.iobj
 b-em.pdb
 src/hdfmt.exe
 scsi/*
-
+.idea
+cmake-*

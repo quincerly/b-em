@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#ifndef NO_USE_SAVE_STATE
 typedef struct _sszfile ZFILE;
 
 extern int savestate_wantsave, savestate_wantload;
@@ -20,5 +21,6 @@ extern void savestate_save_var(unsigned var, FILE *f);
 extern void savestate_save_str(const char *str, FILE *f);
 extern unsigned savestate_load_var(FILE *f);
 extern char *savestate_load_str(FILE *f);
+#endif
 
 #endif

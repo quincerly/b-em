@@ -103,11 +103,13 @@ static ALLEGRO_MENU *create_file_menu(void)
 {
     ALLEGRO_MENU *menu = al_create_menu();
     al_append_menu_item(menu, "Hard Reset", IDM_FILE_RESET, 0, NULL, NULL);
+#ifndef NO_USE_SAVE_STATE
     al_append_menu_item(menu, "Load state...", IDM_FILE_LOAD_STATE, 0, NULL, NULL);
     al_append_menu_item(menu, "Save State...", IDM_FILE_SAVE_STATE, 0, NULL, NULL);
     al_append_menu_item(menu, "Save Screenshot...", IDM_FILE_SCREEN_SHOT, 0, NULL, NULL);
     add_checkbox_item(menu, "Print to file", IDM_FILE_PRINT, prt_fp);
     add_checkbox_item(menu, "Record Music 5000 to file", IDM_FILE_M5000, music5000_fp);
+#endif
     al_append_menu_item(menu, "Exit", IDM_FILE_EXIT, 0, NULL, NULL);
     return menu;
 }
@@ -145,19 +147,29 @@ static ALLEGRO_MENU *create_disc_menu(void)
     al_append_menu_item(menu, "Autoboot disc in 0/2...", IDM_DISC_AUTOBOOT, 0, NULL, NULL);
     al_append_menu_item(menu, "Load disc :0/2...", menu_id_num(IDM_DISC_LOAD, 0), 0, NULL, NULL);
     al_append_menu_item(menu, "Load disc :1/3...", menu_id_num(IDM_DISC_LOAD, 1), 0, NULL, NULL);
+#ifndef NO_USE_MMB
     al_append_menu_item(menu, "Load MMB file...", IDM_DISC_MMB_LOAD, 0, NULL, NULL);
+#endif
     al_append_menu_item(menu, "Eject disc :0/2", menu_id_num(IDM_DISC_EJECT, 0), 0, NULL, NULL);
     al_append_menu_item(menu, "Eject disc :1/3", menu_id_num(IDM_DISC_EJECT, 1), 0, NULL, NULL);
+#ifndef NO_USE_MMB
     al_append_menu_item(menu, "Eject MMB file", IDM_DISC_MMB_EJECT, 0, NULL, NULL);
+#endif
     al_append_menu_item(menu, "New disc :0/2...", 0, 0, NULL, create_disc_new_menu(0));
     al_append_menu_item(menu, "New disc :1/3...", 0, 0, NULL, create_disc_new_menu(1));
     add_checkbox_item(menu, "Write protect disc :0/2", menu_id_num(IDM_DISC_WPROT, 0), writeprot[0]);
     add_checkbox_item(menu, "Write protect disc :1/3", menu_id_num(IDM_DISC_WPROT, 1), writeprot[1]);
     add_checkbox_item(menu, "Default write protect", IDM_DISC_WPROT_D, defaultwriteprot);
+#ifndef NO_USE_IDE
     add_checkbox_item(menu, "IDE hard disc", IDM_DISC_HARD_IDE, ide_enable);
+#endif
+#ifndef NO_USE_SCSI
     add_checkbox_item(menu, "SCSI hard disc", IDM_DISC_HARD_SCSI, scsi_enabled);
+#endif
+#ifndef NO_USE_VDFS
     add_checkbox_item(menu, "VDFS Enabled", IDM_DISC_VDFS_ENABLE, vdfs_enabled);
     al_append_menu_item(menu, "Choose VDFS Root...", IDM_DISC_VDFS_ROOT, 0, NULL, NULL);
+#endif
     disc_menu = menu;
     return menu;
 }
@@ -269,6 +281,7 @@ static ALLEGRO_MENU *create_model_menu(void)
     }
 }
 
+#ifndef NO_USE_TUBE
 static ALLEGRO_MENU *create_tube_menu(void)
 {
     ALLEGRO_MENU *menu = al_create_menu();
@@ -286,6 +299,7 @@ static ALLEGRO_MENU *create_tube_menu(void)
     al_append_menu_item(menu, "Tube speed", 0, 0, NULL, sub);
     return menu;
 }
+#endif
 
 static const char *border_names[] = { "None", "Medium", "Full", NULL };
 static const char *vmode_names[] = { "Scaled", "Interlace", "Scanlines", "Line doubling", NULL };
@@ -325,6 +339,7 @@ static const char *sid_names[] =
     NULL
 };
 
+#ifndef NO_USE_SID
 static ALLEGRO_MENU *create_sid_menu(void)
 {
     ALLEGRO_MENU *menu = al_create_menu();
@@ -337,6 +352,7 @@ static ALLEGRO_MENU *create_sid_menu(void)
     al_append_menu_item(menu, "Sample method", 0, 0, NULL, sub);
     return menu;
 }
+#endif
 
 static const char *wave_names[] = { "Square", "Saw", "Sine", "Triangle", "SID", NULL };
 static const char *dd_type_names[] = { "5.25\"", "3.5\"", NULL };
@@ -356,7 +372,9 @@ static ALLEGRO_MENU *create_sound_menu(void)
     sub = al_create_menu();
     add_radio_set(sub, wave_names, IDM_WAVE, curwave);
     al_append_menu_item(menu, "Internal waveform", 0, 0, NULL, sub);
+#ifndef NO_USE_SID
     al_append_menu_item(menu, "reSID configuration", 0, 0, NULL, create_sid_menu());
+#endif
     sub = al_create_menu();
     add_radio_set(sub, dd_type_names, IDM_DISC_TYPE, ddnoise_type);
     al_append_menu_item(menu, "Disc drive type", 0, 0, NULL, sub);
@@ -439,7 +457,9 @@ static ALLEGRO_MENU *create_settings_menu(void)
     al_append_menu_item(menu, "MIDI", 0, 0, NULL, create_midi_menu());
 #endif
     al_append_menu_item(menu, "Keyboard", 0, 0, NULL, create_keyboard_menu());
+#ifndef NO_USE_MOUSE
     add_checkbox_item(menu, "Mouse (AMX)", IDM_MOUSE_AMX, mouse_amx);
+#endif
     if (joymap_count > 0)
         al_append_menu_item(menu, "Joystick Map", 0, 0, NULL, create_joymap_menu());
     return menu;
@@ -457,14 +477,18 @@ static ALLEGRO_MENU *create_speed_menu(void)
     return menu;
 }
 
+#ifndef NO_USE_DEBUGGER
 static ALLEGRO_MENU *create_debug_menu(void)
 {
     ALLEGRO_MENU *menu = al_create_menu();
     add_checkbox_item(menu, "Debugger", IDM_DEBUGGER, debug_core);
+#ifndef NO_USE_TUBE
     add_checkbox_item(menu, "Debug Tube", IDM_DEBUG_TUBE, debug_tube);
+#endif
     al_append_menu_item(menu, "Break", IDM_DEBUG_BREAK, 0, NULL, NULL);
     return menu;
 }
+#endif
 
 void gui_allegro_init(ALLEGRO_EVENT_QUEUE *queue, ALLEGRO_DISPLAY *display)
 {
@@ -475,10 +499,14 @@ void gui_allegro_init(ALLEGRO_EVENT_QUEUE *queue, ALLEGRO_DISPLAY *display)
     al_append_menu_item(menu, "Tape", 0, 0, NULL, create_tape_menu());
     al_append_menu_item(menu, "ROM", 0, 0, NULL, create_rom_menu());
     al_append_menu_item(menu, "Model", 0, 0, NULL, create_model_menu());
+#ifndef NO_USE_TUBE
     al_append_menu_item(menu, "Tube", 0, 0, NULL, create_tube_menu());
+#endif
     al_append_menu_item(menu, "Settings", 0, 0, NULL, create_settings_menu());
     al_append_menu_item(menu, "Speed", 0, 0, NULL, create_speed_menu());
+#ifndef NO_USE_DEBUGGER
     al_append_menu_item(menu, "Debug", 0, 0, NULL, create_debug_menu());
+#endif
     al_set_display_menu(display, menu);
     al_register_event_source(queue, al_get_default_menu_event_source());
 }
@@ -493,6 +521,7 @@ static int radio_event_simple(ALLEGRO_EVENT *event, int current)
     return num;
 }
 
+#ifndef NO_USE_SAVE_STATE
 static void file_load_state(ALLEGRO_EVENT *event)
 {
     ALLEGRO_DISPLAY *display = (ALLEGRO_DISPLAY *)(event->user.data2);
@@ -578,6 +607,7 @@ static void m5000_rec(ALLEGRO_EVENT *event)
         al_destroy_native_file_dialog(chooser);
     }
 }
+#endif
 
 static void edit_print_clip(ALLEGRO_EVENT *event)
 {
@@ -690,6 +720,7 @@ static void disc_wprot(ALLEGRO_EVENT *event)
     writeprot[drive] = !writeprot[drive];
 }
 
+#ifndef NO_USE_MMB
 static void disc_mmb_load(ALLEGRO_EVENT *event)
 {
     ALLEGRO_FILECHOOSER *chooser;
@@ -708,7 +739,9 @@ static void disc_mmb_load(ALLEGRO_EVENT *event)
         al_destroy_native_file_dialog(chooser);
     }
 }
+#endif
 
+#ifndef NO_USE_IDE
 static void disc_toggle_ide(ALLEGRO_EVENT *event)
 {
     ALLEGRO_MENU *menu = (ALLEGRO_MENU *)(event->user.data3);
@@ -723,7 +756,9 @@ static void disc_toggle_ide(ALLEGRO_EVENT *event)
         }
     }
 }
+#endif
 
+#ifndef NO_USE_SCSI
 static void disc_toggle_scsi(ALLEGRO_EVENT *event)
 {
     ALLEGRO_MENU *menu = (ALLEGRO_MENU *)(event->user.data3);
@@ -738,7 +773,9 @@ static void disc_toggle_scsi(ALLEGRO_EVENT *event)
         }
     }
 }
+#endif
 
+#ifndef NO_USE_VDFS
 static void disc_vdfs_root(ALLEGRO_EVENT *event)
 {
     ALLEGRO_FILECHOOSER *chooser;
@@ -752,6 +789,7 @@ static void disc_vdfs_root(ALLEGRO_EVENT *event)
         }
     }
 }
+#endif
 
 static void tape_load_ui(ALLEGRO_EVENT *event)
 {
@@ -868,6 +906,7 @@ static void change_model(ALLEGRO_EVENT *event)
     update_rom_menu();
 }
 
+#ifndef NO_USE_TUBE
 static void change_tube(ALLEGRO_EVENT *event)
 {
     ALLEGRO_MENU *menu = (ALLEGRO_MENU *)(event->user.data3);
@@ -887,7 +926,9 @@ static void change_tube_speed(ALLEGRO_EVENT *event)
     tube_speed_num = radio_event_simple(event, tube_speed_num);
     tube_updatespeed();
 }
+#endif
 
+#ifndef NO_USE_SID
 static void set_sid_type(ALLEGRO_EVENT *event)
 {
     cursid = radio_event_simple(event, cursid);
@@ -899,6 +940,7 @@ static void set_sid_method(ALLEGRO_EVENT *event)
     sidmethod = radio_event_simple(event, sidmethod);
     sid_settype(sidmethod, cursid);
 }
+#endif
 
 static void change_ddnoise_dtype(ALLEGRO_EVENT *event)
 {
@@ -919,6 +961,7 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
             nula_default_palette();
             main_restart();
             break;
+#ifndef NO_USE_SAVE_STATE
         case IDM_FILE_LOAD_STATE:
             file_load_state(event);
             break;
@@ -934,6 +977,7 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_FILE_M5000:
             m5000_rec(event);
             break;
+#endif
         case IDM_FILE_EXIT:
             quitting = true;
             break;
@@ -949,14 +993,16 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_DISC_LOAD:
             disc_choose(event, "load into", all_dext, ALLEGRO_FILECHOOSER_FILE_MUST_EXIST);
             break;
+#ifndef NO_USE_MMB
         case IDM_DISC_MMB_LOAD:
             disc_mmb_load(event);
             break;
-        case IDM_DISC_EJECT:
-            disc_eject(event);
-            break;
         case IDM_DISC_MMB_EJECT:
             mmb_eject();
+            break;
+#endif
+        case IDM_DISC_EJECT:
+            disc_eject(event);
             break;
         case IDM_DISC_NEW_ADFS_S:
             disc_choose(event, "create in", "*.ads", ALLEGRO_FILECHOOSER_SAVE);
@@ -989,18 +1035,24 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_DISC_WPROT_D:
             defaultwriteprot = !defaultwriteprot;
             break;
+#ifndef NO_USE_IDE
         case IDM_DISC_HARD_IDE:
             disc_toggle_ide(event);
             break;
+#endif
+#ifndef NO_USE_SCSI
         case IDM_DISC_HARD_SCSI:
             disc_toggle_scsi(event);
             break;
+#endif
+#ifndef NO_USE_VDFS
         case IDM_DISC_VDFS_ENABLE:
             vdfs_enabled = !vdfs_enabled;
             break;
         case IDM_DISC_VDFS_ROOT:
             disc_vdfs_root(event);
             break;
+#endif
         case IDM_TAPE_LOAD:
             tape_load_ui(event);
             break;
@@ -1031,12 +1083,14 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_MODEL:
             change_model(event);
             break;
+#ifndef NO_USE_TUBE
         case IDM_TUBE:
             change_tube(event);
             break;
         case IDM_TUBE_SPEED:
             change_tube_speed(event);
             break;
+#endif
         case IDM_VIDEO_DISPTYPE:
             video_set_disptype(radio_event_simple(event, vid_dtype_user));
             break;
@@ -1079,12 +1133,14 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_WAVE:
             curwave = radio_event_simple(event, curwave);
             break;
+#ifndef NO_USE_SID
         case IDM_SID_TYPE:
             set_sid_type(event);
             break;
         case IDM_SID_METHOD:
             set_sid_method(event);
             break;
+#endif
         case IDM_DISC_TYPE:
             change_ddnoise_dtype(event);
             break;
@@ -1134,24 +1190,30 @@ void gui_allegro_event(ALLEGRO_EVENT *event)
         case IDM_SPEED:
             main_setspeed(radio_event_simple(event, emuspeed));
             break;
+#ifndef NO_USE_DEBUGGER
         case IDM_DEBUGGER:
             debug_toggle_core();
             break;
+#ifndef NO_USE_TUBE
         case IDM_DEBUG_TUBE:
             debug_toggle_tube();
             break;
+#endif
         case IDM_DEBUG_BREAK:
             debug_step = 1;
             break;
+#endif
         case IDM_KEY_REDEFINE:
             gui_keydefine_open();
             break;
         case IDM_KEY_AS:
             keyas = !keyas;
             break;
+#ifndef NO_USE_MOUSE
         case IDM_MOUSE_AMX:
             mouse_amx = !mouse_amx;
             break;
+#endif
         case IDM_JOYMAP:
             joystick_change_joymap(radio_event_simple(event, joymap_num));
     }

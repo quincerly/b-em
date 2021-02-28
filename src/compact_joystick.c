@@ -1,6 +1,7 @@
 #include "b-em.h"
 #include "compact_joystick.h"
 
+#ifndef NO_USE_JOYSTICK
 uint8_t compact_joystick_read()
 {
 /*Master Compact inputs :
@@ -26,3 +27,4 @@ uint8_t compact_joystick_read()
         temp &= ~0x01;
     return temp;
 }
+#endif

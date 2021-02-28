@@ -492,7 +492,9 @@ void midi_init(void) {
         midi_jack_init();
         midi_alsa_seq_init();
         midi_alsa_raw_init();
+#ifndef NO_USE_MUSIC5000
         music2000_init(&midi_music2000_out1, &midi_music2000_out2, &midi_music2000_out3);
+#endif
     }
 }
 

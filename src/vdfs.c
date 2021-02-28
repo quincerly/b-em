@@ -310,7 +310,7 @@ static void rom_dispatch(enum vdfs_action act)
 {
     int max = readmem(0x8000);
     if (act < max)
-        pc = readmem16(readmem16(0x8001) + (act << 1));
+        set_pc(readmem16(readmem16(0x8001) + (act << 1)));
     else
         log_warn("vdfs: ROM does not support action %d, max is %d", act, max);
 }
@@ -474,7 +474,7 @@ static void adfs_error(const char *err)
         ch = *err++;
         writemem(addr++, ch);
     } while (ch);
-    pc = 0x100;          // jump to BRK sequence just created.
+    set_pc(0x100);          // jump to BRK sequence just created.
 }
 
 static void adfs_hosterr(int errnum)
@@ -1055,6 +1055,7 @@ void vdfs_init(void)
     scan_seq++;
 }
 
+#ifndef NO_USE_SAVE_STATE
 /*
  * Functions concerned with saving and re-loading the state of VDFS
  * to the save state file.
@@ -1163,6 +1164,7 @@ void vdfs_savestate(FILE *f)
     ss_save_dir2(cat_dir, f);
 }
 
+#endif
 /*
  * This is the execution part of the sideways RAM commands.
  */
@@ -1226,7 +1228,7 @@ static void exec_swr_fs(uint8_t flags, uint16_t fname, int8_t romid, uint32_t st
                         if (ent->attribs & ATTR_IS_DIR)
                             adfs_error(err_wont);
                         else if ((fp = fopen(ent->host_path, "rb"))) {
-                            if (fread(rom + romid * 0x4000 + start, len, 1, fp) != 1 && ferror(fp))
+                            if (fread(rom_slot_ptr(romid) + start, len, 1, fp) != 1 && ferror(fp))
                                 log_warn("vdfs: error reading file '%s': %s", ent->host_fn, strerror(errno));
                             fclose(fp);
                         } else {
@@ -1245,7 +1247,7 @@ static void exec_swr_fs(uint8_t flags, uint16_t fname, int8_t romid, uint32_t st
                         ent = add_new_file(key.parent, &key);
                     if (ent) {
                         if ((fp = fopen(ent->host_path, "wb"))) {
-                            fwrite(rom + romid * 0x4000 + start, len, 1, fp);
+                            fwrite(rom_slot_ptr(romid) + start, len, 1, fp);
                             fclose(fp);
                             load_add = 0xff008000 | (romid << 16) | start;
                             ent->attribs |= ATTR_EXISTS;
@@ -1264,7 +1266,7 @@ static void exec_swr_fs(uint8_t flags, uint16_t fname, int8_t romid, uint32_t st
 
 static void osword_swr_fs(void)
 {
-    uint16_t pb = (y << 8) | x;
+    uint16_t pb = (get_y() << 8) | get_x();
     uint8_t flags  = readmem(pb);
     uint16_t fname = readmem16(pb+1);
     int8_t   romid = readmem(pb+3);
@@ -1281,7 +1283,7 @@ static void exec_swr_ram(uint8_t flags, uint32_t ram_start, uint16_t len, uint32
 
     log_debug("vdfs: exec_swr_ram: flags=%02x, ram_start=%04x, len=%04x, sw_start=%04x, romid=%02d\n", flags, ram_start, len, sw_start, romid);
     if ((nromid = swr_calc_addr(flags, &sw_start, romid)) >= 0) {
-        rom_ptr = rom + romid * 0x4000 + sw_start;
+        rom_ptr = rom_slot_ptr(romid) + sw_start;
         if (ram_start > 0xffff0000 || curtube == -1) {
             if (flags & 0x80)
                 while (len--)
@@ -1290,6 +1292,7 @@ static void exec_swr_ram(uint8_t flags, uint32_t ram_start, uint16_t len, uint32
                 while (len--)
                     writemem(ram_start++, *rom_ptr++);
         }
+#ifndef NO_USE_TUBE
         else {
             if (flags & 0x80)
                 while (len--)
@@ -1298,12 +1301,13 @@ static void exec_swr_ram(uint8_t flags, uint32_t ram_start, uint16_t len, uint32
                 while (len--)
                     tube_writemem(ram_start++, *rom_ptr++);
         }
+#endif
     }
 }
 
 static void osword_swr_ram(void)
 {
-    uint16_t pb = (y << 8) | x;
+    uint16_t pb = (get_y() << 8) | get_x();
     uint8_t  flags     = readmem(pb);
     uint32_t ram_start = readmem32(pb+1);
     uint16_t len       = readmem16(pb+5);
@@ -1417,11 +1421,11 @@ static bool srp_tail(uint16_t addr, uint8_t flag, uint16_t fnaddr, uint16_t star
         flag &= ~0x40;
     if (fs_num) {
         exec_swr_fs(flag, fnaddr, romid, start, len);
-        p.c = 0;
+        set_c(0);
         return true;
     } else {
         uint16_t msw;
-        p.c = 1;
+        set_c( 1);
         writemem(0x100, flag);
         writemem16(0x101, fnaddr);
         writemem(0x103, romid);
@@ -1437,9 +1441,9 @@ static bool srp_tail(uint16_t addr, uint8_t flag, uint16_t fnaddr, uint16_t star
             msw = 0;
         writemem16(0x10a, msw);
         log_debug("vdfs: srp_tail executing via OSWORD, flag=%d, fnaddr=%04X, romid=%d, start=%04X, len=%d, msw=%02X", flag, fnaddr, romid, start, len, msw);
-        a = 67;
-        x = 0;
-        y = 1;
+        set_a(67);
+        set_x(0);
+        set_y(1);
         rom_dispatch(VDFS_ROM_OSW_TAIL);
         return false;
     }
@@ -1554,6 +1558,7 @@ static uint32_t write_bytes(FILE *fp, uint32_t addr, size_t bytes)
             fwrite(buffer, bytes, 1, fp);
         }
     }
+#ifndef NO_USE_TUBE
     else {
         while (bytes >= sizeof buffer) {
             char *ptr = buffer;
@@ -1571,6 +1576,7 @@ static uint32_t write_bytes(FILE *fp, uint32_t addr, size_t bytes)
             fwrite(buffer, bytes, 1, fp);
         }
     }
+#endif
     return addr;
 }
 
@@ -1621,7 +1627,7 @@ static void osfile_write(uint32_t pb, const char *path, uint32_t (*callback)(FIL
             write_back(ent);
             writemem32(pb+0x0a, ent->u.file.length);
             writemem32(pb+0x0e, ent->attribs);
-            a = 1;
+            set_a(1);
         } else
             log_warn("vdfs: unable to create file '%s': %s\n", ent->host_fn, strerror(errno));
     }
@@ -1633,7 +1639,7 @@ static void osfile_set_meta(uint32_t pb, const char *path, uint16_t which)
 
     if ((ent = find_entry(path, &key, cur_dir)) && ent->attribs & ATTR_EXISTS) {
         if (ent->attribs & ATTR_IS_DIR)
-            a = 2;
+            set_a(2);
         else {
             if (which & META_LOAD)
                 ent->u.file.load_addr = readmem32(pb+0x02);
@@ -1665,11 +1671,11 @@ static void osfile_set_meta(uint32_t pb, const char *path, uint16_t which)
                 ent->attribs = (ent->attribs & ~ATTR_ACORN_MASK) | attr;
             }
             write_back(ent);
-            a = 1;
+            set_a(1);
         }
     }
     else
-        a = 0;
+        set_a(0);
 }
 
 static void osfile_get_attr(uint32_t pb, const char *path)
@@ -1679,10 +1685,10 @@ static void osfile_get_attr(uint32_t pb, const char *path)
     if ((ent = find_entry(path, &key, cur_dir)) && ent->attribs & ATTR_EXISTS) {
         scan_entry(ent);
         osfile_attribs(pb, ent);
-        a = (ent->attribs & ATTR_IS_DIR) ? 2 : 1;
+        set_a( (ent->attribs & ATTR_IS_DIR) ? 2 : 1);
     }
     else
-        a = 0;
+        set_a(0);
 }
 
 static void delete_inf(vdfs_entry *ent)
@@ -1704,14 +1710,14 @@ static void delete_file(vdfs_entry *ent)
             if (ent == prev_dir)
                 prev_dir = cur_dir;
             ent->attribs &= ~(ATTR_IS_DIR|ATTR_EXISTS);
-            a = 2;
+            set_a(2);
         } else
             adfs_hosterr(errno);
     } else {
         if (unlink(ent->host_path) == 0) {
             ent->attribs &= ~ATTR_EXISTS;
             delete_inf(ent);
-            a = 1;
+            set_a(1);
         } else
             adfs_hosterr(errno);
     }
@@ -1727,7 +1733,7 @@ static void osfile_delete(uint32_t pb, const char *path)
             delete_file(ent);
         }
         else
-            a = 0;
+            set_a(0);
     }
 }
 
@@ -1742,7 +1748,7 @@ static void create_dir(vdfs_entry *ent)
     if (res == 0) {
         ent->attribs |= ATTR_EXISTS;
         scan_attr(ent, 0, 0);
-        a = 2;
+        set_a(2);
     }
     else {
         adfs_hosterr(errno);
@@ -1788,6 +1794,7 @@ static void read_file_io(FILE *fp, uint32_t addr)
     }
 }
 
+#ifndef NO_USE_TUBE
 static void read_file_tube(FILE *fp, uint32_t addr)
 {
     char buffer[32768];
@@ -1799,6 +1806,7 @@ static void read_file_tube(FILE *fp, uint32_t addr)
             tube_writemem(addr++, *ptr++);
     }
 }
+#endif
 
 static void osfile_load(uint32_t pb, const char *path)
 {
@@ -1816,11 +1824,13 @@ static void osfile_load(uint32_t pb, const char *path)
                 addr = ent->u.file.load_addr;
             if (addr > 0xffff0000 || curtube == -1)
                 read_file_io(fp, addr);
+#ifndef NO_USE_TUBE
             else
                 read_file_tube(fp, addr);
+#endif
             fclose(fp);
             osfile_attribs(pb, ent);
-            a = 1;
+            set_a(1);
         } else {
             log_warn("vdfs: unable to load file '%s': %s\n", ent->host_fn, strerror(errno));
             adfs_hosterr(errno);
@@ -1831,6 +1841,9 @@ static void osfile_load(uint32_t pb, const char *path)
 
 static void osfile(void)
 {
+    const uint8_t a = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
     uint32_t pb = (y << 8) | x;
     char path[MAX_ACORN_PATH];
 
@@ -1900,15 +1913,15 @@ static void osbget(void)
     int ch;
     FILE *fp;
 
-    log_debug("vdfs: osbget(A=%02X, X=%02X, Y=%02X)", a, x, y);
-    if ((fp = getfp_read(y))) {
+    log_debug("vdfs: osbget(A=%02X, X=%02X, Y=%02X)", get_a(), get_x(), get_y());
+    if ((fp = getfp_read(get_y()))) {
         if ((ch = getc(fp)) != EOF) {
-            a = ch;
-            p.c = 0;
+            set_a(ch);
+            set_c(0);
             return;
         }
     }
-    p.c = 1;
+    set_c(1);
 }
 
 static FILE *getfp_write(int channel)
@@ -1943,6 +1956,10 @@ static FILE *getfp_write(int channel)
 
 static void osbput(void)
 {
+    const uint8_t a = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
+
     FILE *fp;
 
     log_debug("vdfs: osbput(A=%02X, X=%02X, Y=%02X)", a, x, y);
@@ -1960,9 +1977,12 @@ static void osfind(void)
     FILE *fp;
     char path[MAX_ACORN_PATH];
 
-    log_debug("vdfs: osfind(A=%02X, X=%02X, Y=%02X)", a, x, y);
+    const uint8_t a0 = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
+    log_debug("vdfs: osfind(A=%02X, X=%02X, Y=%02X)", a0, x, y);
 
-    if (a == 0) {   // close file.
+    if (a0 == 0) {   // close file.
         channel = y;
         if (channel == 0)
             close_all();
@@ -1975,8 +1995,8 @@ static void osfind(void)
         }
     } else if (check_valid_dir(cur_dir, "current")) {        // open file.
         mode = NULL;
-        acorn_mode = a;
-        a = 0;
+        acorn_mode = a0;
+        set_a(0);
         channel = -1;
         do {
             if (++channel >= NUM_CHANNELS) {
@@ -1989,7 +2009,7 @@ static void osfind(void)
         ent = find_entry(path, &key, cur_dir);
         if (ent && (ent->attribs & (ATTR_EXISTS|ATTR_IS_DIR)) == (ATTR_EXISTS|ATTR_IS_DIR)) {
             vdfs_chan[channel].ent = ent;  // make "half-open"
-            a = MIN_CHANNEL + channel;
+            set_a(MIN_CHANNEL + channel);
             return;
         }
         if (acorn_mode == 0x40) {
@@ -2039,12 +2059,12 @@ static void osfind(void)
                 scan_attr(ent, ent->u.file.load_addr, ent->u.file.exec_addr);
                 vdfs_chan[channel].fp = fp;
                 vdfs_chan[channel].ent = ent;
-                a = MIN_CHANNEL + channel;
+                set_a( MIN_CHANNEL + channel);
             } else
                 log_warn("vdfs: osfind: unable to open file '%s' in mode '%s': %s\n", ent->host_fn, mode, strerror(errno));
         }
     }
-    log_debug("vdfs: osfind returns a=%d", a);
+    log_debug("vdfs: osfind returns a=%d", get_a());
 }
 
 static void osgbpb_write(uint32_t pb)
@@ -2054,7 +2074,7 @@ static void osgbpb_write(uint32_t pb)
     size_t bytes;
 
     if ((fp = getfp_write(readmem(pb)))) {
-        if (a == 0x01)
+        if (get_a() == 0x01)
             fseek(fp, readmem32(pb+9), SEEK_SET);
         mem_ptr = readmem32(pb+1);
         bytes = readmem32(pb+5);
@@ -2079,10 +2099,12 @@ static size_t read_bytes(FILE *fp, uint32_t addr, size_t bytes)
             while (nbytes--)
                 writemem(addr++, *ptr++);
         }
+#ifndef NO_USE_TUBE
         else {
             while (nbytes--)
                 tube_writemem(addr++, *ptr++);
         }
+#endif
     }
     while (bytes > 0) {
         char *ptr = buffer;
@@ -2093,10 +2115,12 @@ static size_t read_bytes(FILE *fp, uint32_t addr, size_t bytes)
             while (nbytes--)
                 writemem(addr++, *ptr++);
         }
+#ifndef NO_USE_TUBE
         else {
             while (nbytes--)
                 tube_writemem(addr++, *ptr++);
         }
+#endif
     }
     return 0;
 }
@@ -2109,7 +2133,7 @@ static int osgbpb_read(uint32_t pb)
     size_t undone = 0;
 
     if ((fp = getfp_read(readmem(pb)))) {
-        if (a == 0x03)
+        if (get_a() == 0x03)
             fseek(fp, readmem32(pb+9), SEEK_SET);
         mem_ptr = readmem32(pb+1);
         bytes = readmem32(pb+5);
@@ -2280,6 +2304,10 @@ static int osgbpb_list(uint32_t pb)
 
 static void osgbpb(void)
 {
+    const uint8_t a = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
+
     int status = 0;
     uint32_t pb = (y << 8) | x;
 
@@ -2316,7 +2344,7 @@ static void osgbpb(void)
         default:
             log_debug("vdfs: osgbpb unimplemented for a=%d", a);
     }
-    p.c = status;
+    set_c(status);
 }
 
 /*
@@ -2328,13 +2356,17 @@ static void osargs(void)
     FILE *fp;
     long temp;
 
-    log_debug("vdfs: osargs(A=%02X, X=%02X, Y=%02X)", a, x, y);
+    const uint8_t a0 = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
+
+    log_debug("vdfs: osargs(A=%02X, X=%02X, Y=%02X)", a0, x, y);
 
     if (y == 0) {
-        switch (a)
+        switch (a0)
         {
             case 0:
-                a = fs_num; // say this filing selected.
+                set_a(fs_num); // say this filing selected.
                 break;
             case 1:
                 writemem32(x, cmd_tail);
@@ -2343,10 +2375,10 @@ static void osargs(void)
                 flush_all();
                 break;
             default:
-                log_debug("vdfs: osargs not implemented for y=0, a=%d", a);
+                log_debug("vdfs: osargs not implemented for y=0, a=%d", a0);
         }
     } else if ((fp = getfp_read(y))) {
-        switch (a)
+        switch (a0)
         {
             case 0:     // read sequential pointer
                 writemem32(x, ftell(fp));
@@ -2364,7 +2396,7 @@ static void osargs(void)
                 fflush(fp);
                 break;
             default:
-                log_debug("vdfs: osargs: unrecognised function code a=%d for channel y=%d", a, y);
+                log_debug("vdfs: osargs: unrecognised function code a=%d for channel y=%d", a0, y);
         }
     }
 }
@@ -2454,7 +2486,8 @@ static void run_file(const char *err)
     vdfs_entry *ent, key;
     FILE *fp;
     char path[MAX_ACORN_PATH];
-
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
     if (check_valid_dir(cur_dir, "current")) {
         cmd_tail = parse_name(path, sizeof path, (y << 8) | x);
         ent = find_entry(path, &key, cur_dir);
@@ -2468,13 +2501,16 @@ static void run_file(const char *err)
                 if (addr > 0xffff0000 || curtube == -1) {
                     log_debug("vdfs: run_file: writing to I/O proc memory at %08X", addr);
                     read_file_io(fp, addr);
-                    pc = ent->u.file.exec_addr;
-                } else {
+                    set_pc(ent->u.file.exec_addr);
+                }
+#ifndef NO_USE_TUBE
+                else {
                     log_debug("vdfs: run_file: writing to tube proc memory at %08X", addr);
                     writemem32(0xc0, ent->u.file.exec_addr); // set up for tube execution.
                     read_file_tube(fp, addr);
                     rom_dispatch(VDFS_ROM_TUBE_EXEC);
                 }
+#endif
                 fclose(fp);
             } else {
                 log_warn("vdfs: unable to run file '%s': %s\n", ent->host_fn, strerror(errno));
@@ -2718,10 +2754,10 @@ static void cat_next(void)
     if (cat_ent) {
         gcopy_attr(cat_ent);
         cat_ent = cat_ent->next;
-        p.c = 0;
+        set_c(0);
     }
     else
-        p.c = 1;
+        set_c(1);
 }
 
 static void file_info(uint16_t addr)
@@ -2783,11 +2819,11 @@ static void files_nxt(void)
         if (ent) {
             chan_seq = chan;
             gcopy_open(ent);
-            p.c = 0;
+            set_c(0);
             return;
         }
     }
-    p.c = 1;
+    set_c(1);
 }
 
 static enum vdfs_action osw7fmc_act = VDFS_ACT_OSW7F_NONE;
@@ -2856,7 +2892,7 @@ static void cmd_osw7f(uint16_t addr)
     char  cmd[MAX_CMD_LEN];
 
     if (readmem(addr) == '\r') {
-        x = osw7fmc_act - VDFS_ACT_OSW7F_NONE;
+        set_x( osw7fmc_act - VDFS_ACT_OSW7F_NONE);
         rom_dispatch(VDFS_ROM_OSW7F);
     }
     else if ((addr = parse_cmd(addr, cmd)) && ((ent = lookup_cmd(ctab_osw7f, ARRAY_SIZE(ctab_osw7f), cmd)))) {
@@ -2873,7 +2909,7 @@ static void cmd_osw7f(uint16_t addr)
 static void select_vdfs(uint8_t fsno)
 {
     if (!fs_num) {
-        y = fsno;
+        set_y(fsno);
         rom_dispatch(VDFS_ROM_FSSTART);
     }
 }
@@ -2938,8 +2974,8 @@ static bool vdfs_do(enum vdfs_action act, uint16_t addr)
     case VDFS_ROM_LIST:
     case VDFS_ROM_PRINT:
     case VDFS_ROM_TYPE:
-        x = addr & 0xff;
-        y = addr >> 8;
+        set_x( addr & 0xff);
+        set_y( addr >> 8);
         rom_dispatch(act);
     case VDFS_ACT_NOP:
         break;
@@ -3035,6 +3071,8 @@ static void osfsc_cmd(void)
     const struct cmdent *ent;
     char  cmd[MAX_CMD_LEN];
 
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
     if ((addr = parse_cmd((y << 8) | x, cmd))) {
         if ((ent = lookup_cmd(ctab_filing, ARRAY_SIZE(ctab_filing), cmd))) {
             if (vdfs_do(ent->act, addr))
@@ -3049,13 +3087,16 @@ static void osfsc(void)
 {
     FILE *fp;
 
-    log_debug("vdfs: osfsc(A=%02X, X=%02X, Y=%02X)", a, x, y);
+    const uint8_t a = get_a();
+    const uint8_t x0 = get_x();
+    const uint8_t y = get_y();
+    log_debug("vdfs: osfsc(A=%02X, X=%02X, Y=%02X)", a, x0, y);
 
-    p.c = 0;
+    set_c(0);
     switch(a) {
         case 0x01: // check EOF
-            if ((fp = getfp_read(x)))
-                x = feof(fp) ? 0xff : 0x00;
+            if ((fp = getfp_read(x0)))
+                set_x(feof(fp) ? 0xff : 0x00);
             break;
         case 0x02: // */ command
         case 0x04: // *RUN command
@@ -3065,21 +3106,21 @@ static void osfsc(void)
             osfsc_cmd();
             break;
         case 0x05:
-            if (cat_prep(x + (y << 8), cur_dir, "current"))
+            if (cat_prep(x0 + (y << 8), cur_dir, "current"))
                 rom_dispatch(VDFS_ROM_CAT);
             break;
         case 0x06: // new filesystem taking over.
             fs_num = 0;
             break;
         case 0x09:
-            if (cat_prep(x + (y << 8), cur_dir, "current"))
+            if (cat_prep(x0 + (y << 8), cur_dir, "current"))
                 rom_dispatch(VDFS_ROM_EX);
             break;
         case 0x0a:
-            file_info((y << 8) | x);
+            file_info((y << 8) | x0);
             break;
         case 0x0c:
-            rename_file((y << 8) | x);
+            rename_file((y << 8) | x0);
             break;
         default:
             log_debug("vdfs: osfsc unimplemented for a=%d", a);
@@ -3119,7 +3160,7 @@ static void osword_discio(void)
             read_bytes(fp, addr, bytes);
         else if (cmd == 0x4b) {
             write_bytes(fp, addr, bytes);
-            p.z = 1;
+            set_z(1);
         }
         writemem(pb+10, 0);
     }
@@ -3149,25 +3190,28 @@ static void osword(void)
         {
             case 0x42:
                 osword_swr_ram();
-                a = 0;
+                set_a(0);
                 break;
             case 0x43:
                 osword_swr_fs();
-                a = 0;
+                set_a(0);
                 break;
             case 0x7f:
                 osword_discio();
-                a = 0;
+                set_a(0);
                 break;
         }
     }
 }
 
  static void check_ram(void) {
-    p.c = 0;
+     const uint8_t x = get_x();
+     const uint8_t y = get_y();
+
+     set_c(0);
     if (y >= 0 && y <= 15)
         if (rom_slots[y].swram)
-            p.c = 1;
+            set_c(1);
 }
 
 static const struct cmdent ctab_always[] = {
@@ -3200,13 +3244,13 @@ static void serv_cmd(void)
     const struct cmdent *ent;
     char  cmd[MAX_CMD_LEN];
 
-    if ((addr = parse_cmd(readmem16(0xf2) + y, cmd))) {
+    if ((addr = parse_cmd(readmem16(0xf2) + get_y(), cmd))) {
         ent = lookup_cmd(ctab_always, ARRAY_SIZE(ctab_always), cmd);
         if (!ent && vdfs_enabled)
             ent = lookup_cmd(ctab_enabled, ARRAY_SIZE(ctab_enabled), cmd);
         if (ent)
             if (vdfs_do(ent->act, addr))
-                a = 0;
+                set_a(0);
     }
 }
 
@@ -3220,7 +3264,7 @@ static void serv_help(void)
 {
     const struct cmdent *ent;
     char  cmd[MAX_CMD_LEN];
-    uint16_t addr = readmem16(0xf2) + y;
+    uint16_t addr = readmem16(0xf2) + get_y();
 
     int ch = readmem(addr);
     if (ch == '\r')
@@ -3236,6 +3280,10 @@ static uint8_t save_y;
 
 static void service(void)
 {
+    const uint8_t a = get_a();
+    const uint8_t x = get_x();
+    const uint8_t y = get_y();
+
     log_debug("vdfs: rom service a=%02X, x=%02X, y=%02X", a, x, y);
     switch(a)
     {
@@ -3279,10 +3327,10 @@ static void service(void)
 
 static void startup(void)
 {
-    if (a > 0)
+    if (get_a() > 0)
         mmb_reset();
-    a = 0x02;
-    y = save_y;
+    set_a(0x02);
+    set_y(save_y);
 }
 
 static inline void dispatch(uint8_t value)
@@ -3333,7 +3381,7 @@ void vdfs_write(uint16_t addr, uint8_t value)
             log_debug("vdfs: set fs_num=%02x", value);
             break;
         case 2:
-            a = reg_a;
+            set_a(reg_a);
             dispatch(value);
             break;
         case 3:

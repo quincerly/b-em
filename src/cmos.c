@@ -1,5 +1,7 @@
 /*B-em v2.2 by Tom Walker
-  Master 128 CMOS emulation*/
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * Master 128 CMOS emulation*/
 
 /*Master 128 uses a HD146818
 
@@ -19,10 +21,14 @@
 #include "cmos.h"
 #include "compactcmos.h"
 #include <time.h>
-
+#ifdef PICO_BUILD
+#include "cmos.bin.inc"
+static_assert(sizeof(cmos) == 64, "");
+#else
 static uint8_t cmos[64];
+#endif
 
-static int cmos_old, cmos_addr, cmos_ena, cmos_rw;
+static int8_t cmos_old, cmos_addr, cmos_ena, cmos_rw;
 static time_t rtc_epoc_ref, rtc_epoc_adj, rtc_last;
 static struct tm rtc_tm;
 
@@ -157,15 +163,22 @@ uint8_t cmos_read()
 }
 
 void cmos_load(MODEL m) {
+#ifndef PICO_BUILD
     FILE *f;
     ALLEGRO_PATH *path;
     const char *cpath;
+#endif
 
     if (!m.cmos[0])
         return;
+#ifndef NO_USE_COMPACT
     if (m.compact)
         compactcmos_load(m);
+#endif
     else {
+#ifdef PICO_BUILD
+        assert(!strcmp(m.cmos, "cmos"));
+#else
         memset(cmos, 0, sizeof cmos);
         rtc_epoc_ref = rtc_epoc_adj = 0;
         if ((path = find_cfg_file(m.cmos, ".bin"))) {
@@ -189,6 +202,7 @@ void cmos_load(MODEL m) {
         }
         else
             log_warn("cmos: CMOS file %s not found", m.cmos);
+#endif
     }
 }
 
@@ -199,9 +213,11 @@ void cmos_save(MODEL m) {
 
     if (!m.cmos[0])
         return;
-    if (m.compact)
+    if (m.compact) {
+#ifndef NO_USE_COMPACT
         compactcmos_save(m);
-    else {
+#endif
+    } else {
         if ((path = find_cfg_dest(m.cmos, ".bin"))) {
             cpath = al_path_cstr(path, ALLEGRO_NATIVE_PATH_SEP);
             if ((f = fopen(cpath, "wb"))) {

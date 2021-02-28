@@ -21,5 +21,7 @@ extern bool sound_music5000, sound_filter;
 
 void sound_init(void);
 void sound_poll(void);
+void sound_poll_n(int n);
+int sound_cycle_sync();
 
 #endif

@@ -4,7 +4,7 @@
 #include "keyboard.h"
 #include "model.h"
 
-static uint8_t allegro2bbc[ALLEGRO_KEY_MAX] =
+static const uint8_t allegro2bbc[ALLEGRO_KEY_MAX] =
 {
     0xaa,   // 0
     0x41,   // 1    ALLEGRO_KEY_A
@@ -235,28 +235,48 @@ static uint8_t allegro2bbc[ALLEGRO_KEY_MAX] =
     0x40,   // 226  ALLEGRO_KEY_CAPSLOCK
 };
 
+#ifndef NO_USE_KEY_LOOKUP
 int keylookup[ALLEGRO_KEY_MAX];
+#endif
 bool keyas = 0;
 
-static int keycol, keyrow;
-static int bbckey[16][16];
+static int8_t keycol, keyrow;
+static uint16_t bbckey[16];
 
 void key_clear(void)
 {
-    int c, r;
-    for (c = 0; c < 16; c++)
-        for (r = 0; r < 16; r++)
-            bbckey[c][r] = 0;
+    memset(bbckey, 0, sizeof(bbckey));
     sysvia_set_ca2(0);
 }
 
-static void key_update()
+static inline bool is_bbckey_down(int col, int row) {
+    return (bbckey[col] & (1u<<row)) != 0;
+}
+
+static inline void set_bbckey_down(int col, int row, bool down) {
+    uint16_t mask = 1u << row;
+    bbckey[col] = (bbckey[col]&~mask) | (down?mask:0);
+}
+
+static void key_update(bool change)
 {
     int c,d;
+#ifdef SHORTCIRCUIT_KEYBOARD_POLL
+    static int8_t last_IC32 = 1;
+    if (last_IC32 != (IC32 & 8)) {
+        last_IC32 = IC32 & 8;
+        change = true;
+    }
+#endif
     if (IC32 & 8) {
+#ifdef SHORTCIRCUIT_KEYBOARD_POLL
+        if (!change) {
+            return;
+        }
+#endif
         for (d = 0; d < ((MASTER) ? 13 : 10); d++) {
             for (c = 1; c < 8; c++) {
-                if (bbckey[d][c]) {
+                if (is_bbckey_down(d,c)){
                     sysvia_set_ca2(1);
                     return;
                 }
@@ -264,9 +284,17 @@ static void key_update()
         }
     }
     else {
+#ifdef SHORTCIRCUIT_KEYBOARD_POLL
+        static int8_t last_keycol = -1;
+        if (last_keycol != keycol) {
+            last_keycol = keycol;
+            change = true;
+        }
+        if (!change) return;
+#endif
         if (keycol < ((MASTER) ? 13 : 10)) {
             for (c = 1; c < 8; c++) {
-                if (bbckey[keycol][c]) {
+                if (is_bbckey_down(keycol,c)){
                     sysvia_set_ca2(1);
                     return;
                 }
@@ -282,7 +310,9 @@ int key_map(ALLEGRO_EVENT *event)
     if (code < ALLEGRO_KEY_MAX) {
         if (keyas && code == ALLEGRO_KEY_A)
             code = ALLEGRO_KEY_CAPSLOCK;
+#ifndef NO_USE_KEY_LOOKUP
         code = keylookup[code];
+#endif
     }
     log_debug("keyboard: mapping %d to %d", event->keyboard.keycode, code);
     return code;
@@ -295,8 +325,8 @@ static void set_key(int code, int state)
     vkey = allegro2bbc[code];
     log_debug("keyboard: code=%d, vkey=%02X", code, vkey);
     if (vkey != 0xaa) {
-        bbckey[vkey & 15][vkey >> 4] = state;
-        key_update();
+        set_bbckey_down(vkey & 15, vkey >> 4, state);
+        key_update(true);
     }
 }
 
@@ -313,22 +343,21 @@ void key_up(int code)
 void key_scan(int row, int col) {
     keyrow = row;
     keycol = col;
-    key_update();
+    key_update(false);
 }
 
 bool key_is_down(void) {
     if (keyrow == 0 && keycol >= 2 && keycol <= 9)
         return kbdips & (1 << (9 - keycol));
     else
-        return bbckey[keycol][keyrow];
+        return is_bbckey_down(keycol, keyrow);
 }
 
 bool key_any_down(void)
 {
-    for (int c = 0; c < 16; c++)
-        for (int r = 1; r < 16; r++)
-            if (bbckey[c][r])
-                return true;
+    for(uint i=0;i<sizeof(bbckey);i++) {
+        if (bbckey[i]) return true;
+    }
     return false;
 }
 
@@ -336,7 +365,7 @@ bool key_code_down(int code)
 {
     if (code < ALLEGRO_KEY_MAX) {
         code = allegro2bbc[code];
-        return bbckey[code & 0x0f][code >> 4];
+        return is_bbckey_down(code & 0x0f, code >> 4);
     }
     return false;
 }

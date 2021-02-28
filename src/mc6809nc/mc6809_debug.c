@@ -74,25 +74,25 @@ static uint32_t dbg_disassemble(uint32_t addr, char *buf, size_t bufsize) {
 static uint32_t dbg_reg_get(int which) {
    switch (which) {
    case i_PC:
-      return get_pc();
+      return get_6809_pc();
    case i_CC:
-      return get_cc();
+      return get_6809_cc();
    case i_A:
-      return get_a();
+      return get_6809_a();
    case i_B:
-      return get_b();
+      return get_6809_b();
    case i_D:
-      return get_d();
+      return get_6809_d();
    case i_X:
-      return get_x();
+      return get_6809_x();
    case i_Y:
-      return get_y();
+      return get_6809_y();
    case i_U:
-      return get_u();
+      return get_6809_u();
    case i_S:
-      return get_s();
+      return get_6809_s();
    case i_DP:
-      return get_dp();
+      return get_6809_dp();
    default:
       return 0;
    }
@@ -102,34 +102,34 @@ static uint32_t dbg_reg_get(int which) {
 static void  dbg_reg_set(int which, uint32_t value) {
    switch (which) {
    case i_PC:
-      set_pc(value);
+      set_6809_pc(value);
       break;
    case i_CC:
-      set_cc(value);
+      set_6809_cc(value);
       break;
    case i_A:
-      set_a(value);
+      set_6809_a(value);
       break;
    case i_B:
-      set_b(value);
+      set_6809_b(value);
       break;
    case i_D:
-      set_d(value);
+      set_6809_d(value);
       break;
    case i_X:
-      set_x(value);
+      set_6809_x(value);
       break;
    case i_Y:
-      set_y(value);
+      set_6809_y(value);
       break;
    case i_U:
-      set_u(value);
+      set_6809_u(value);
       break;
    case i_S:
-      set_s(value);
+      set_6809_s(value);
       break;
    case i_DP:
-      set_dp(value);
+      set_6809_dp(value);
       break;
    }
 };
@@ -181,7 +181,7 @@ static void dbg_reg_parse(int which, const char *strval) {
 };
 
 static uint32_t dbg_get_instr_addr() {
-   return get_pc();
+   return get_6809_pc();
 }
 
 cpu_debug_t mc6809nc_cpu_debug = {

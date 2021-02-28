@@ -7,6 +7,7 @@
 #include "tapenoise.h"
 #include "sound.h"
 
+#ifndef NO_USE_TAPE
 static ALLEGRO_VOICE *voice;
 static ALLEGRO_MIXER *mixer;
 static ALLEGRO_AUDIO_STREAM *stream;
@@ -155,3 +156,4 @@ void tapenoise_motorchange(int stat)
     if ((stat < 2) && (smp = tsamples[stat]))
         al_play_sample(smp, 1.0, 0.0, 1.0, ALLEGRO_PLAYMODE_ONCE, NULL);
 }
+#endif

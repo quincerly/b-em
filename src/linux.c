@@ -1,6 +1,7 @@
 /*B-em v2.2 by Tom Walker
   Linux main*/
 
+#ifndef NEVER_USE_ALLEGRO
 #ifndef WIN32
 #include "b-em.h"
 #include <allegro5/allegro_native_dialog.h>
@@ -224,5 +225,5 @@ ALLEGRO_PATH *find_cfg_dest(const char *name, const char *ext)
     }
     return false;
 }
-
+#endif
 #endif

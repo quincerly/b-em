@@ -1,11 +1,14 @@
 /*B-em v2.2 by Tom Walker
-  ADC emulation*/
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * ADC emulation*/
 
 #include "b-em.h"
 #include "adc.h"
 #include "via.h"
 #include "sysvia.h"
 
+#ifndef NO_USE_ADC
 static uint8_t adc_status,adc_high,adc_low,adc_latch;
 int adc_time;
 
@@ -75,3 +78,4 @@ void adc_loadstate(FILE *f)
         adc_latch  = getc(f);
         adc_time   = getc(f);
 }
+#endif

@@ -1,5 +1,7 @@
-/*B-em v2.2 by Tom Walker
-  System VIA + keyboard emulation*/
+/* B-em v2.2 by Tom Walker
+ * Pico version (C) 2021 Graham Sanderson
+ *
+ * System VIA + keyboard emulation*/
 
 #include "b-em.h"
 #include "model.h"
@@ -16,25 +18,13 @@ VIA sysvia;
 #define KB_CAPSLOCK_FLAG 0x0400
 #define KB_SCROLOCK_FLAG 0x0100
 
-void sysvia_set_ca1(int level)
+void __time_critical_func(sysvia_set_ca2)(int level)
 {
-        via_set_ca1(&sysvia,level);
-}
-void sysvia_set_ca2(int level)
-{
-        if (OS01) level = !level; /*OS 0.1 programs CA2 to interrupt on negative edge and expects the keyboard to still work*/
-        via_set_ca2(&sysvia,level);
-}
-void sysvia_set_cb1(int level)
-{
-        via_set_cb1(&sysvia,level);
-}
-void sysvia_set_cb2(int level)
-{
-        via_set_cb2(&sysvia,level);
+    if (OS01) level = !level; /*OS 0.1 programs CA2 to interrupt on negative edge and expects the keyboard to still work*/
+    via_set_ca2(&sysvia,level);
 }
 
-void sysvia_via_set_cb2(int level)
+void __time_critical_func(sysvia_via_set_cb2)(int level)
 {
         if (level && !sysvia.cb2) /*Low -> high*/
            crtc_latchpen();
@@ -65,7 +55,6 @@ uint8_t sdbval;
   For use when contending with whatever else is outputting to the bus*/
 static uint8_t sysvia_sdb_out;
 
-int scrsize;
 int kbdips;
 
 /*Calculate current state of slow data bus
@@ -81,7 +70,7 @@ static void sysvia_update_sdb()
             sdbval &= 0x7f;
 }
 
-static void sysvia_write_IC32(uint8_t val)
+static void __time_critical_func(sysvia_write_IC32)(uint8_t val)
 {
         uint8_t oldIC32 = IC32;
         int temp = 0;
@@ -96,7 +85,7 @@ static void sysvia_write_IC32(uint8_t val)
         if (!(IC32 & 1) && (oldIC32 & 1))
            sn_write(sdbval);
 
-        scrsize = ((IC32 & 0x10) ? 2 : 0) | ((IC32 & 0x20) ? 1 : 0);
+        set_scrsize(((IC32 & 0x10) ? 2 : 0) | ((IC32 & 0x20) ? 1 : 0));
 
         if ((IC32 & 0xC0) != (oldIC32 & 0xC0))
         {
@@ -106,7 +95,7 @@ static void sysvia_write_IC32(uint8_t val)
         if (MASTER && !compactcmos) cmos_update(IC32, sdbval);
 }
 
-void sysvia_write_portA(uint8_t val)
+void __time_critical_func(sysvia_write_portA)(uint8_t val)
 {
         sysvia_sdb_out = val;
 
@@ -115,25 +104,27 @@ void sysvia_write_portA(uint8_t val)
         if (MASTER && !compactcmos) cmos_update(IC32, sdbval);
 }
 
-void sysvia_write_portB(uint8_t val)
+void __time_critical_func(sysvia_write_portB)(uint8_t val)
 {
         sysvia_write_IC32(val);
         /*Master 128 reuses the speech processor inputs*/
         if (MASTER && !compactcmos)
            cmos_writeaddr(val);
+#ifndef NO_USE_COMPACT
         /*Master Compact reuses the joystick fire inputs*/
         if (compactcmos)
            compactcmos_i2cchange(val & 0x20, val & 0x10);
+#endif
 }
 
-uint8_t sysvia_read_portA()
+uint8_t __time_critical_func(sysvia_read_portA)()
 {
         sysvia_update_sdb();
 
         return sdbval;
 }
 
-uint8_t sysvia_read_portB()
+uint8_t __time_critical_func(sysvia_read_portB)()
 {
         uint8_t temp = 0xFF;
         if (compactcmos)
@@ -148,19 +139,6 @@ uint8_t sysvia_read_portB()
                 if (joybutton[0]) temp &= ~0x10;
                 if (joybutton[1]) temp &= ~0x20;
         }
-        return temp;
-}
-
-void sysvia_write(uint16_t addr, uint8_t val)
-{
-//        log_debug("SYSVIA write %04X %02X\n",addr,val);
-        via_write(&sysvia, addr, val);
-}
-
-uint8_t sysvia_read(uint16_t addr)
-{
-        uint8_t temp = via_read(&sysvia, addr);
-//        log_debug("SYSVIA read  %04X %02X\n",addr,temp);
         return temp;
 }
 
@@ -179,7 +157,7 @@ void sysvia_reset()
         sysvia.intnum = 1;
 }
 
-
+#ifndef NO_USE_SAVE_STATE
 void sysvia_savestate(FILE *f)
 {
         via_savestate(&sysvia, f);
@@ -192,5 +170,6 @@ void sysvia_loadstate(FILE *f)
         via_loadstate(&sysvia, f);
 
         IC32=getc(f);
-        scrsize=((IC32&16)?2:0)|((IC32&32)?1:0);
+        set_scrsize(((IC32&16)?2:0)|((IC32&32)?1:0));
 }
+#endif

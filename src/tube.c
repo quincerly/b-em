@@ -20,6 +20,13 @@ int tube_multipler = 1;
 int tube_speed_num = 0;
 int tubecycles = 0;
 
+uint8_t (*tube_readmem)(uint32_t addr);
+void (*tube_writemem)(uint32_t addr, uint8_t byte);
+void (*tube_exec)(void);
+#ifndef NO_USE_SAVE_STATE
+void (*tube_proc_savestate)(ZFILE *zfp);
+void (*tube_proc_loadstate)(ZFILE *zfp);
+#endif
 /*
  * The number of tube cycles to run for each core 6502 processor cycle
  * is calculated by mutliplying the multiplier in this table with the
@@ -56,10 +63,10 @@ void tube_updateints()
 {
     int new_irq = 0;
 
-    interrupt &= ~8;
+    interrupt_clr_mask(8);
 
     if ((tubeula.r1stat & 1) && (tubeula.hstat[3] & 128))
-        interrupt |= 8;
+        interrupt_set_mask(8);
 
     if (((tubeula.r1stat & 2) && (tubeula.pstat[0] & 128)) || ((tubeula.r1stat & 4) && (tubeula.pstat[3] & 128))) {
         new_irq |= 1;
@@ -332,8 +339,10 @@ bool tube_32016_init(void *rom)
         tube_readmem = read_x8;
         tube_writemem = write_x8;
         tube_exec  = n32016_exec;
+#ifndef NO_USE_SAVE_STATE
         tube_proc_savestate = NULL;
         tube_proc_loadstate = NULL;
+#endif
         return true;
 }
 

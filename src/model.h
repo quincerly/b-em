@@ -40,25 +40,42 @@ typedef struct
 } MODEL;
 
 extern MODEL *models;
-extern int model_count;
+extern int8_t model_count;
 
 typedef struct
 {
     char name[32];
     bool (*init)(void *rom);
     void (*reset)(void);
+#ifndef NO_USE_DEBUGGER
     cpu_debug_t *debug;
+#endif
     int  rom_size;
     char bootrom[16];
     int  speed_multiplier;
 } TUBE;
 
+#ifndef NO_USE_TUBE
 #define NUM_TUBES 8
 extern TUBE tubes[NUM_TUBES];
+#endif
 
-extern int curmodel, curtube, oldmodel, selecttube;
+extern int8_t curmodel;
+extern int8_t oldmodel;
+#ifndef NO_USE_TUBE
+extern int8_t curtube;
+extern int8_t selecttube;
+#else
+#define curtube 0
+#define selecttube -1
+#endif
 extern fdc_type_t fdc_type;
-extern bool BPLUS, x65c02, MASTER, MODELA, OS01, compactcmos;
+extern bool BPLUS, x65c02, MASTER, MODELA, OS01;
+#ifndef NO_USE_COMPACT
+extern bool compactcmos;
+#else
+#define compactcmos false
+#endif
 
 void model_loadcfg(void);
 void model_check(void);

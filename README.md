@@ -25,6 +25,8 @@ Some options take immediate effect, others will flash meaning there is a change 
 
 ## RP2040 Version
 
+To support video output you will need a VGA breakout board for the RP2040, e.g. the [Pimoroni Pico VGA Demo Base](https://shop.pimoroni.com/products/pimoroni-pico-vga-demo-base). 
+
 All discs are embedded within the binary; see [Embedding Discs](#Embedding-Discs) for instructions.
 
 By default the emulator does not use USB host mode which would allow connecting a keyboard. Instead you should use
@@ -33,7 +35,7 @@ The UART RX pin for receiving data is 21 by default.
 
 Note (Feb 28 2021) , I just tried, and host mode USB is currently panic-ing, so that is not an option atm.
 
-## Pi (or Linux) version
+## Pi (or Linux) Version
 
 Discs are still embedded within the binary; see [Embedding Discs](#Embedding-Discs) for instructions, however you can also
 pass a disc via command line via `-disc path/to/disc`. Only .SSD and .DSD are supported.

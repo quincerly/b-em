@@ -495,7 +495,11 @@ void update_menu_visuals() {
                                                   menu_highlight_fg_color2, level);
         }
         menu_disabled_fg_color = PICO_SCANVIDEO_ALPHA_MASK + PICO_SCANVIDEO_PIXEL_FROM_RGB5(17, 17, 20);
+#if PICO_SCANVIDEO_COLOR_PIN_COUNT > 3
         menu_highlight_bg_color = PICO_SCANVIDEO_ALPHA_MASK + PICO_SCANVIDEO_PIXEL_FROM_RGB8(48, 138, 208);
+#else
+        menu_highlight_bg_color = PICO_SCANVIDEO_ALPHA_MASK + PICO_SCANVIDEO_PIXEL_FROM_RGB8(0, 0, 255);
+#endif
     } else {
         menu_text_color = menu_highlight_bg_color = menu_highlight_fg_color = menu_disabled_fg_color = 0;
     }

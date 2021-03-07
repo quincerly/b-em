@@ -36,7 +36,7 @@ endfunction()
 
 # PICO_FS_PATH set to try if you are on a recent GCC and can use FS path
 function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
-    cmake_parse_arguments(FLAGS "" "NO_HW_EVENT;CMD_LINE" "" ${ARGN} )
+    cmake_parse_arguments(FLAGS "1080p" "NO_HW_EVENT;CMD_LINE" "" ${ARGN} )
 
     # todo override game file
     set(OVERRIDE_DISC_FILE ${NAME}_discs)
@@ -47,6 +47,7 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
     if (DEFINED ${OVERRIDE_ROM_FILE})
         set(ROM_FILE ${OVERRIDE_ROM_FILE})
     endif()
+    message("{$NAME} DISCS=${DISC_FILE} ROMS=${ROM_FILE}")
     configure_b_em_exe(${NAME}
             VERSION 2.2?-${VER}
             TUBE 0
@@ -67,6 +68,18 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
                 USE_HW_EVENT
         )
     endif()
+    if (FLAGS_1080p)
+        message("WEEVAL ${NAME}")
+        target_compile_definitions(${NAME} PRIVATE
+                MODE_1080p
+                )
+    else()
+        target_compile_definitions(${NAME} PRIVATE
+                MODE_1280
+                )
+    endif()
+
+
     pico_add_extra_outputs(${NAME})
     target_link_libraries(${NAME} PRIVATE spock_common ${GUI})
     if (PICO_ON_DEVICE AND NOT PICO_NO_FLASH)
@@ -108,6 +121,9 @@ if (TARGET x_gui)
 endif()
 
 if (PICO_ON_DEVICE)
+    # these versions use a standard 1080p 50Hz mode, so probably work on more monitors
+    add_spock_exe(beeb_1080p pico_gui pico-1080p discs/beeb_discs.txt roms/beeb_roms.txt 1080p)
+    add_spock_exe(master_1080p pico_gui pico-1080p discs/master_discs.txt roms/master_roms.txt 1080p)
     # ---------------------------------------------------------------------------------
     # beeb/master are scanvideo based versions for the device (but run at 360Mhz not 270Mhz)
     add_spock_exe(beeb_360 pico_gui pico_360 discs/beeb_discs.txt roms/beeb_roms.txt)
@@ -276,12 +292,22 @@ target_compile_definitions(spock_common INTERFACE
         #            DUMP_DISC
 
         USE_NON_INTERLACED_TELETEXT
-        MODE_1280
 
         )
 
 if (TARGET beeb)
     target_compile_definitions(beeb PRIVATE
+            # firetrack has a tight timer polling loop (the one in the GUI is a bug)
+            PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=24 #18 // moving sepgraph into flash gave us a little more
+
+            USE_NON_INTERLACED_TELETEXT
+            PICO_SCANVIDEO_LINKED_SCANLINE_BUFFERS=1
+            PIXELATED_PAUSE=1
+            )
+endif()
+
+if (TARGET beeb_1080p)
+    target_compile_definitions(beeb_1080p PRIVATE
             # firetrack has a tight timer polling loop (the one in the GUI is a bug)
             PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=24 #18 // moving sepgraph into flash gave us a little more
 
@@ -314,6 +340,14 @@ endif()
 
 if (TARGET master)
     target_compile_definitions(master PRIVATE
+            MODEL_MASTER
+            PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=16 # faster so save some RAM
+            PIXELATED_PAUSE=1
+            )
+endif()
+
+if (TARGET master_1080p)
+    target_compile_definitions(master_1080p PRIVATE
             MODEL_MASTER
             PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=16 # faster so save some RAM
             PIXELATED_PAUSE=1

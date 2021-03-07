@@ -25,7 +25,11 @@ Some options take immediate effect, others will flash meaning there is a change 
 
 ## RP2040 Version
 
-To support video output you will need a VGA breakout board for the RP2040, e.g. the [Pimoroni Pico VGA Demo Base](https://shop.pimoroni.com/products/pimoroni-pico-vga-demo-base). 
+To support video output you will need a VGA breakout board for the RP2040, e.g. the [Pimoroni Pico VGA Demo Base](https://shop.pimoroni.com/products/pimoroni-pico-vga-demo-base).
+
+Note that all RP2040 versions overclock the RP2040 and up the voltage to 1.25v, so use at your own risk!
+
+Note there are new (as of March 7th 2021) variants which use 1080p 50Hz as the video mode, which will hopefully be recofgnized by more monitors than 1280x1024 50Hz
 
 All discs are embedded within the binary; see [Embedding Discs](#Embedding-Discs) for instructions.
 
@@ -33,7 +37,7 @@ By default the emulator does not use USB host mode which would allow connecting 
 [sdl_event_forwarder](https://github.com/kilograham/sdl_event_forwarder) to send events from your host PC over UART.
 The UART RX pin for receiving data is 21 by default.
 
-Note (Feb 28 2021) , I just tried, and host mode USB is currently panic-ing, so that is not an option atm.
+Note (Feb 28 2021) , I just tried, and host mode USB is currently panic-ing, so that is not an option atm. (actually since then i have heard people having success, though it will interrupt your boo-beep and cause some screen corruption perhaps)
 
 ## Pi (or Linux) Version
 
@@ -143,8 +147,12 @@ cmake -DPICO_SDK_PATH=path/to/pico-sdk -DPICO_PLATFORM=host -DPICO_SDK_PRE_LIST_
 make -j4
 ```
 
-Outputs are `src/pico/beeb` and `src/pico/master` along with higher clock rate versions (which may or may not work for you)
-`src/pico/beeb360` and `src/pico/master360`
+Outputs are `src/pico/beeb` and `src/pico/master`, however these use 1280x1024x50 which is a non-standard mode (it worked fine on all my monitors!)
+
+Additionally now there are `src/pico/beeb_1080p` and `src/pico/master_1080p`.. these
+require a slightly higher overclock (297Mhz vs 270Mhz), but most if not all RP2040 should still be able to do this I believe.
+
+Finally there are some 360Mhz versions, but these which use the 1280x1024x50 mode again, are perhaps less interesting now `src/pico/beeb360` and `src/pico/master360`
 
 ## Embedding Discs
 

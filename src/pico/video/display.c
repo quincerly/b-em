@@ -21,6 +21,7 @@
 #endif
 
 #include "menu.h"
+#include "pico/binary_info.h"
 
 //#define HACK_MODE7_FIELD 0
 
@@ -87,7 +88,7 @@ CU_REGISTER_DEBUG_PINS(teletext, graphics, interlace, tiles, core_use, scanline,
 //CU_SELECT_DEBUG_PINS(graphics)
 
 // todo being wrong frame isn't helping
-#ifndef MODE_1280
+#if !defined(MODE_1280) && !defined(MODE_1080p)
 #define HALF_LINE_HEIGHT 1
 #else
 #if PICO_ON_DEVICE
@@ -1398,7 +1399,7 @@ int avg_color(int col, int col2) {
 }
 
 #if !X_GUI
-#ifndef MODE_1280
+#if !defined(MODE_1280) && !defined(MODE_1080p)
 #if PICO_ON_DEVICE
 #define TIMING_MULT 6
 #else
@@ -1441,7 +1442,15 @@ const struct scanvideo_mode vga_mode_640x256_50_bem =
                 .xscale = 1,
                 .yscale = 1,
         };
-#else
+
+#define vga_mode vga_mode_640x256_50_bem
+
+#elif defined(MODE_1280)
+// todo bi_decl should be available anyway
+#if !PICO_NO_BINARY_INFO
+bi_decl(bi_program_feature("1280x1024 50Hz video mode (non standard)"));
+#endif
+
 // note this is 1280x1024, but we don't have square pixels in that mode at 270Mhz
 const struct scanvideo_timing vga_timing_640x1024_50 =
         {
@@ -1480,6 +1489,52 @@ const struct scanvideo_mode vga_mode_640x256_50_bem_1280 =
                 .yscale = 1,
         };
 
+#define vga_mode vga_mode_640x256_50_bem_1280
+
+#elif defined(MODE_1080p)
+// todo bi_decl should be available anyway
+#if !PICO_NO_BINARY_INFO
+bi_decl(bi_program_feature("1080p 50Hz video mode"));
+#endif
+
+const struct scanvideo_timing vga_timing_1920x1080_50 =
+        {
+                .clock_freq = 148500000,
+
+                .h_active = 1920,
+#if PICO_ON_DEVICE
+                .v_active = 1080,
+#else
+                .v_active = 540,
+#endif
+
+                .h_front_porch = 528,
+                .h_pulse = 44,
+                .h_total = 2640,
+                .h_sync_polarity = 1,
+
+                .v_front_porch = 4,
+                .v_pulse = 5,
+                .v_total = 1125,
+                .v_sync_polarity = 1,
+
+                .enable_clock = 0,
+                .clock_polarity = 0,
+
+                .enable_den = 0
+        };
+
+const struct scanvideo_mode vga_mode_640x270_50_bem_1080p =
+        {
+                .default_timing = &vga_timing_1920x1080_50,
+                .pio_program = &video_24mhz_composable,
+                .width = 640,
+                .height = 270,
+                .xscale = 3,
+                .yscale = 1,
+        };
+
+#define vga_mode vga_mode_640x270_50_bem_1080p
 #endif
 
 #ifdef DEBUG_SCANLINES
@@ -1570,7 +1625,7 @@ static uint current_border_color() {
 }
 
 static bool top_bottom(int sl) {
-    return !sl || sl == 255;// - (state.crtc_mode == TELETEXT); // why is teletext so far off!?
+    return !sl || sl == vga_mode.height - 1;// - (state.crtc_mode == TELETEXT); // why is teletext so far off!?
 }
 #endif
 
@@ -1654,11 +1709,7 @@ int run_buffer(uint32_t *data_buf, int read_pos, int limit);
 
 static void setup_video() {
 #if !X_GUI
-#ifndef MODE_1280
-    scanvideo_setup(&vga_mode_640x256_50_bem);
-#else
-    scanvideo_setup(&vga_mode_640x256_50_bem_1280);
-#endif
+    scanvideo_setup(&vga_mode);
 #else
     printf("TODO: x_gui_setup_video()\n");
 #endif
@@ -1667,6 +1718,13 @@ static void setup_video() {
     menu_init();
 #if PICO_ON_DEVICE
     masked_run_aligned_cmd = pio_add_program(pio0, &masked_run_aligned_program);
+#if MODE_1080p
+    // need to stretch the menu much wider
+    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay1] =
+            pio_encode_delay(8) | masked_run_aligned_program.instructions[masked_run_aligned_offset_delay1];
+    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay2] =
+            pio_encode_delay(8) | masked_run_aligned_program.instructions[masked_run_aligned_offset_delay2];
+#endif
 #elif !X_GUI
     masked_run_aligned_cmd = 22;
     void simulate_composable_masked_run_aligned(const uint16_t **dma_data, uint16_t **pixels, int32_t max_pixels, bool overlay);

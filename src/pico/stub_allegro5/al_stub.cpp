@@ -83,7 +83,11 @@ void setup_clock() {
     // needs an even faster clock atm (room for improvement in teletext rendering tho)
     set_sys_clock_khz(360000, true);
 #else
+#if MODE_1080p
+    set_sys_clock_khz(297000, true);
+#else
     set_sys_clock_khz(270000, true);
+#endif
 #endif
 #endif
 }

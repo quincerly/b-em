@@ -24,6 +24,7 @@
 #include "pico/video/display.h"
 
 #include <allegro5/allegro_audio.h>
+#include "pico/binary_info.h"
 
 #if 0
 #define audio_assert(x) ({if (!(x)) panic("%d", __LINE__);})
@@ -156,6 +157,11 @@ bool al_install_audio(void) {
 #if !X_GUI
     producer_pool = audio_new_producer_pool(&producer_format, 3, BUFLEN_SO * 2); // todo correct size
     bool __unused ok;
+    // todo bi_decl should be available anyway
+#if !PICO_NO_BINARY_INFO
+    bi_decl(bi_3pins_with_names(PICO_AUDIO_I2S_DATA_PIN, "I2S DATA", PICO_AUDIO_I2S_CLOCK_PIN_BASE, "I2S BCLK",
+                                PICO_AUDIO_I2S_CLOCK_PIN_BASE+1, "I2S LRCLK"));
+#endif
     struct audio_i2s_config config = {
             .data_pin = PICO_AUDIO_I2S_DATA_PIN,
             .clock_pin_base = PICO_AUDIO_I2S_CLOCK_PIN_BASE,

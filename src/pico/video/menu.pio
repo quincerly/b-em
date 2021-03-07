@@ -12,10 +12,12 @@ begin:
 pixel:
     out x, 1
     jmp x-- on
+public delay1:
     set pins, 0
     jmp y-- pixel
     out pc, 16
 on:
+public delay2:
     mov pins, isr
 off:
     jmp y-- pixel

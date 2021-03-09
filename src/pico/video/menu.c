@@ -59,12 +59,17 @@ bool xgui_paused;
 static void pause_handler(struct option *option, enum option_cmd cmd, int param);
 #endif
 #ifdef VGABOARD_BUTTON_A_PIN
+//#define SMPS_MENU_OPTION 1
+#endif
+#ifdef SMPS_MENU_OPTION
 static void smps_mode_handler(struct option *option, enum option_cmd cmd, int param);
 #endif
 #if ENABLE_FRAME_SKIP
 static void frame_skip_handler(struct option *option, enum option_cmd cmd, int param);
 #endif
-
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+static void widescreen_handler(struct option *option, enum option_cmd cmd, int param);
+#endif
 
 struct option options[] = {
         {
@@ -106,6 +111,13 @@ struct option options[] = {
         },
 #endif
 #endif
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+        {
+                .handler = widescreen_handler,
+                .txt = "Widescreen",
+                .value = 1,
+        },
+#endif
 #if ENABLE_FRAME_SKIP
         {
                 .handler = frame_skip_handler,
@@ -113,7 +125,7 @@ struct option options[] = {
                 .value = -1,
         },
 #endif
-#ifdef VGABOARD_BUTTON_A_PIN
+#if SMPS_MENU_OPTION
         {
                 .handler = smps_mode_handler,
                 .txt = "SMPS mode",
@@ -279,6 +291,30 @@ static void pause_handler(struct option *option, enum option_cmd cmd, int param)
 
 #endif
 
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+static uint8_t widescreen_number;
+static void widescreen_handler(struct option *option, enum option_cmd cmd, int param) {
+    widescreen_number = option - options;
+    if (cmd == OPTION_UPDATE || cmd == OPTION_INIT_COMPLETE) {
+        if (param) {
+            option->value ^= 1;
+        }
+        option->value_string = onoff_str(option->value);
+        set_widescreen(option->value);
+    }
+}
+
+void reflect_widescreen(bool widescreen) {
+    if (widescreen_number > 0) {
+        struct option *o = options + widescreen_number;
+        if (widescreen != o->value) {
+            o->value = widescreen;
+            menu_state.do_fill_menu = true;
+        }
+    }
+}
+#endif
+
 #if ENABLE_FRAME_SKIP
 static uint8_t frame_skip_number;
 static void frame_skip_handler(struct option *option, enum option_cmd cmd, int param) {
@@ -289,7 +325,7 @@ static void frame_skip_handler(struct option *option, enum option_cmd cmd, int p
 }
 
 void reflect_frame_skip_count(int8_t value) {
-    if (frame_skip_number >= 0) {
+    if (frame_skip_number > 0) {
         struct option *o = options + frame_skip_number;
         if (o->value != value) {
             static char buf[8];
@@ -331,7 +367,7 @@ static void vpos_adjust_handler(struct option *option, enum option_cmd cmd, int 
     }
 }
 
-#ifdef VGABOARD_BUTTON_A_PIN
+#ifdef SMPS_MENU_OPTION
 
 static void smps_mode_handler(struct option *option, enum option_cmd cmd, int param) {
     if (cmd == OPTION_UPDATE || cmd == OPTION_EXECUTE) {

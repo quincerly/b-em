@@ -2,6 +2,7 @@
 # Now we need the SDK
 pico_sdk_init()
 
+
 function(create_embed_file TARGET SOURCE_FILE TARGET_FILE)
     if (NOT EmbedTool_FOUND)
         set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_LIST_DIR})
@@ -72,6 +73,7 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
         message("WEEVAL ${NAME}")
         target_compile_definitions(${NAME} PRIVATE
                 MODE_1080p
+                WIDESCREEN_OPTION
                 )
     else()
         target_compile_definitions(${NAME} PRIVATE
@@ -277,8 +279,7 @@ target_compile_definitions(pico_gui INTERFACE
         PICO_AUDIO_BUFFER_SAMPLE_LENGTH=128
         PICO_AUDIO_BUFFERS_PER_CHANNEL=7
         PICO_SCANVIDEO_PLANE_COUNT=2
-        #            PICO_SCANVIDEO_MAX_SCANLINE_BUFFER2_WORDS=13
-        PICO_SCANVIDEO_MAX_SCANLINE_BUFFER2_WORDS=14 # extra menu space 6 words
+        PICO_SCANVIDEO_MAX_SCANLINE_BUFFER2_WORDS=17 #14 (+3 for !widescreen)
         PICO_SCANVIDEO_MISSING_SCANLINE_COLOR=0
         PICO_DEBUG_MALLOC_LOW_WATER=0x20040000
         PICO_DIVIDER_CALL_IDIV0=0
@@ -307,6 +308,10 @@ if (TARGET beeb)
 endif()
 
 if (TARGET beeb_1080p)
+    if (NOT USE_148MHZ_FLASH_IN_1080p)
+        pico_set_boot_stage2(beeb_1080p slower_boot2)
+    endif()
+
     target_compile_definitions(beeb_1080p PRIVATE
             # firetrack has a tight timer polling loop (the one in the GUI is a bug)
             PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=24 #18 // moving sepgraph into flash gave us a little more
@@ -347,6 +352,9 @@ if (TARGET master)
 endif()
 
 if (TARGET master_1080p)
+    if (NOT USE_148MHZ_FLASH_IN_1080p)
+        pico_set_boot_stage2(master_1080p slower_boot2)
+    endif()
     target_compile_definitions(master_1080p PRIVATE
             MODEL_MASTER
             PICO_SCANVIDEO_SCANLINE_BUFFER_COUNT=16 # faster so save some RAM

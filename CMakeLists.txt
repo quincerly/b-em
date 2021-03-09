@@ -21,6 +21,8 @@ if (PICO_BUILD)
     else()
         message("Building b-em for generic host mode using the Pico SDK")
     endif()
+    list(APPEND PICO_BOARD_HEADER_DIRS ${CMAKE_CURRENT_LIST_DIR}/src/pico/boards)
+
     include(pico_sdk_import.cmake)
     # We also need PICO EXTRAS
     include(pico_extras_import.cmake)

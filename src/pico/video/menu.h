@@ -145,6 +145,10 @@ extern bool xgui_paused;
 void set_pixelated_pause(bool pause);
 #endif
 
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+void set_widescreen(bool widescreen);
+void reflect_widescreen(bool widescreen);
+#endif
 void reflect_vpos_offset(int8_t value);
 void reflect_frame_skip_count(int8_t value);
 #ifdef __cplusplus

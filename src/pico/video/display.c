@@ -2,7 +2,6 @@
  * Pico version (C) 2021 Graham Sanderson
  */
 #include <pico/time.h>
-#include <pico/time.h>
 #include "pico.h"
 #include "b-em.h"
 #include "display.h"
@@ -25,6 +24,11 @@
 
 //#define HACK_MODE7_FIELD 0
 
+#if defined(MODE_1280) && !defined(X_GUI)
+// draw a border briefly (initially) to give monitor a clue about the edges of the screen
+#define ENABLE_BORDER
+#endif
+
 #if !X_GUI && !PICO_SCANVIDEO_LINKED_SCANLINE_BUFFERS
 #error requires linked scanline buffers
 #endif
@@ -44,7 +48,9 @@ void set_vpos_offset(int o) {
     next_vpos_offset = o;
 }
 
+#ifdef ENABLE_BORDER
 uint8_t border_counter = 25;
+#endif
 
 #if PICO_ON_DEVICE
 #include "menu.pio.h"
@@ -221,20 +227,25 @@ static uint32_t tiles_dirty[8];
 static int dirty_tile_count;
 #endif
 
+#define PPS_VALID_LINE_COUNT 128
 #if PIXELATED_PAUSE
 uint32_t * const pps_work_area = (uint32_t *)mode7_pixels;
 #if 0 // argh older gcc versions suck!
 uint8_t * const pps_line_valid = (uint8_t *)(pps_work_area + 160);
-uint8_t * const pps_mode7_alpha = (uint8_t *)(apps_line_valid + 128);
+uint8_t * const pps_mode7_alpha = (uint8_t *)(apps_line_valid + PPS_VALID_LINE_COUNT);
 uint16_t * const pps_bitmap = (uint16_t *)(apps_mode7_alpha + 172); // 169 needed
 #else
 // although admittedly with this the compiler checks the bounds!
 uint8_t * const pps_line_valid = (uint8_t *)(mode7_pixels[0][0] + 160 * 2);
-uint8_t * const pps_mode7_alpha = (uint8_t *)(mode7_pixels[0][0] + 160 * 2 + 128 / 2);
-uint16_t * const pps_bitmap = (uint16_t *)(mode7_pixels[0][0] + 160 * 2 + 128 / 2 + 172 / 2); // 169 needed
+uint8_t * const pps_mode7_alpha = (uint8_t *)(mode7_pixels[0][0] + 160 * 2 + PPS_VALID_LINE_COUNT / 2);
+uint16_t * const pps_bitmap = (uint16_t *)(mode7_pixels[0][0] + 160 * 2 + PPS_VALID_LINE_COUNT / 2 + 172 / 2); // 169 needed
 #endif
+#define PP_SIZE (160 * 2 + PPS_VALID_LINE_COUNT / 2 + 172 / 2 + 80 * 256 / 2)
+static_assert(PP_SIZE * 2 < sizeof(mode7_pixels), "");
 uint16_t * pps_bitmap_line;
 uint16_t pps_line_number;
+// we only have RAM for 128 lines - but 1080p has 135!
+#define check_pps_line_number(x) ((x) < 128)
 #endif
 
 static inline void inline_mode7_thing(struct aligned_8_pixels *dest, const struct maybe_aligned_8_pixels *src1,
@@ -311,61 +322,10 @@ static inline void inline_mode7_thing(struct aligned_8_pixels *dest, const struc
 #endif
 }
 
-//static int __count;
-static struct scanvideo_scanline_buffer *wrap_scanvideo_begin_scanline_generation(bool block) {
-#ifndef X_GUI
-        struct scanvideo_scanline_buffer * rc;
-        if (!non_interlaced_teletext) {
-            rc = scanvideo_begin_scanline_generation(block);
-        } else {
-            rc = scanvideo_begin_scanline_generation_linked(2, block);
-        }
-#if PIXELATED_PAUSE
-        if (display_pps == PPS_SETUP_FRAME) {
-            pps_line_number = scanvideo_scanline_number(rc->scanline_id);
-            if (!(pps_line_number & 1)) {
-                pps_line_valid[pps_line_number/2] = pps_line_valid[pps_line_number/2] * 2 + 1;
-                memset(pps_work_area, 0, 640);
-            }
-        }
-#endif
-        if (debuggo) printf("New SL %08x\n", (uint)rc->scanline_id);
-        return rc;
-#else
-    struct scanvideo_scanline_buffer *rc = x_gui_begin_scanline();
-    rc->double_height = non_interlaced_teletext;
-    if (!rc->double_height) rc->row1 = NULL;
-    return rc;
-#endif
-}
-
 #if PIXELATED_PAUSE
 #define PP_MASK_1 PICO_SCANVIDEO_PIXEL_FROM_RGB5(0x1f, 0, 0x1f)
 #define PP_MASK_2 PICO_SCANVIDEO_PIXEL_FROM_RGB5(0, 0x1f, 0)
 #endif
-
-static void wrap_scanvideo_end_scanline_generation(struct scanvideo_scanline_buffer *scanline_buffer) {
-#if PIXELATED_PAUSE
-    if (display_pps == PPS_SETUP_FRAME) {
-        if (1 == (pps_line_number & 1u)) {
-            pps_bitmap_line = pps_bitmap + (pps_line_number/2) * 80;
-            pps_line_valid[pps_line_number/2] = pps_line_valid[pps_line_number/2] * 2 + 2;
-            assert(((intptr_t)(pps_bitmap_line + 80))-((intptr_t)(pps_work_area)) < sizeof(mode7_pixels));
-            for(uint i=0;i<80;i++) {
-                uint pixel = (pps_work_area[i*2] >> 1u) & PP_MASK_1;
-                pixel |= (pps_work_area[i*2+1] >> 1u) & PP_MASK_2;
-                pps_bitmap_line[i] = pixel;
-            }
-        }
-    }
-#endif
-#if !X_GUI
-    scanvideo_end_scanline_generation(scanline_buffer);
-#else
-    scanline_buffer->half_line = pos_tracking.had_half_line;
-    x_gui_end_scanline(scanline_buffer);
-#endif
-}
 
 #define black_pixels8 ((struct maybe_aligned_8_pixels *)&mode7_chars[0])
 #define black_aligned_8_pixels ((struct aligned_8_pixels *)&mode7_chars[0])
@@ -963,11 +923,6 @@ static void __time_critical_func(draw_bytes_teletext)(const uint8_t *dat_ptr, in
                         pps_work_area[(x/16)*4+1] += color_range[16+(a0 + a2)/2];
                         pps_work_area[(x/16)*4+2] += color_range[(a1 + a3)/2];
                         pps_work_area[(x/16)*4+3] += color_range[16+(a1 + a3)/2];
-                        if (current_scanline_pixels2) {
-                            struct aligned_8_pixels *pix2 = (struct aligned_8_pixels *) (current_scanline_pixels2 + x);
-                            inline_mode7_thing(pix, black_pixels8, black_pixels8);
-                            inline_mode7_thing(pix2, black_pixels8, black_pixels8);
-                        }
 #else
 #error expected USE_DIRTY_TILE_COUNT - never wrote a version of the above which didnt use it
 #endif
@@ -1063,6 +1018,10 @@ static void __time_critical_func(draw_bytes_non_teletext_hi)(const uint8_t *dat,
                     pps_work_area[pos_tracking.xpos*2] += tile->p[0];
                     pps_work_area[pos_tracking.xpos*2+1] += tile->p[1];
                 }
+                // todo we should just be able to do a pos_tracking.xpos++ here
+                //  as the line is going to be black anyway, but i see visual glitching (at
+                //  least while running a program that is constantly changing the palette
+                //  so leaving it in for now, though it is a bit of a waste of time/space
                 draw_tile8_hi(black_aligned_8_pixels);
             }
         } else
@@ -1144,6 +1103,10 @@ static void __time_critical_func(draw_bytes_non_teletext_lo)(const uint8_t *dat,
                     pps_work_area[pos_tracking.xpos*4+2] += tile->p[4];
                     pps_work_area[pos_tracking.xpos*4+3] += tile->p[5];
                 }
+                // todo we should just be able to do a pos_tracking.xpos++ here
+                //  as the line is going to be black anyway, but i see visual glitching (at
+                //  least while running a program that is constantly changing the palette
+                //  so leaving it in for now, though it is a bit of a waste of time/space
                 draw_tile8_lo(black_aligned_8_pixels);
             }
         } else
@@ -1534,6 +1497,23 @@ const struct scanvideo_mode vga_mode_640x270_50_bem_1080p =
                 .yscale = 1,
         };
 
+#ifdef WIDESCREEN_OPTION
+const struct scanvideo_mode vga_mode_640x270_50_bem_1080p_non_widescreen =
+        {
+                .default_timing = &vga_timing_1920x1080_50,
+                .pio_program = &video_24mhz_composable,
+                .width = 960,
+                .height = 270,
+                .xscale = 2,
+                .yscale = 1,
+        };
+static int8_t widescreen=-1, next_widescreen;
+bool current_scanline_shifted;
+#else
+#define widescreen true
+#endif
+static void update_widescreen();
+
 #define vga_mode vga_mode_640x270_50_bem_1080p
 #endif
 
@@ -1618,7 +1598,7 @@ static void draw_debug_scanline_pixels(uint32_t *pixels, enum debug_scanline_typ
     p[23] = pos_tracking.vadj ? c2 : 0;
 }
 #endif
-#ifndef X_GUI
+#ifdef ENABLE_BORDER
 static uint current_border_color() {
     uint x = MIN(border_counter, 63) / 2;
     return PICO_SCANVIDEO_PIXEL_FROM_RGB5(x,x,x);
@@ -1633,12 +1613,94 @@ static bool top_bottom(int sl) {
 uint do_end_of_scanline(uint16_t *buf16, int pixels);
 #endif
 
+static struct scanvideo_scanline_buffer *wrap_scanvideo_begin_scanline_generation(bool block) {
+#ifndef X_GUI
+    struct scanvideo_scanline_buffer * rc;
+    if (!non_interlaced_teletext) {
+        rc = scanvideo_begin_scanline_generation(block);
+    } else {
+        rc = scanvideo_begin_scanline_generation_linked(2, block);
+    }
+#if PIXELATED_PAUSE
+    if (display_pps == PPS_SETUP_FRAME) {
+        pps_line_number = scanvideo_scanline_number(rc->scanline_id);
+        if (check_pps_line_number(pps_line_number/2) && !(pps_line_number & 1)) {
+            pps_line_valid[pps_line_number/2] = pps_line_valid[pps_line_number/2] * 2 + 1;
+            memset(pps_work_area, 0, 640);
+        }
+    }
+#endif
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+    current_scanline_shifted = !widescreen;
+    if (current_scanline_shifted) {
+        for(scanvideo_scanline_buffer_t *buf = rc; buf; buf = buf->link) {
+            *buf->data++ = COMPOSABLE_COLOR_RUN;
+            *buf->data++ = (160-3-2) | (COMPOSABLE_RAW_2P << 16u);
+            *buf->data++ = 0;
+            buf->data_max -= 3;
+#ifdef DISPLAY_MENU
+            *buf->data2++ = COMPOSABLE_COLOR_RUN;
+            *buf->data2++ = (160-3-2) | (COMPOSABLE_RAW_2P << 16u);
+            *buf->data2++ = 0;
+            buf->data2_max -= 3;
+#endif
+        }
+    }
+#endif
+    if (debuggo) printf("New SL %08x\n", (uint)rc->scanline_id);
+    return rc;
+#else
+    struct scanvideo_scanline_buffer *rc = x_gui_begin_scanline();
+    rc->double_height = non_interlaced_teletext;
+    if (!rc->double_height) rc->row1 = NULL;
+    return rc;
+#endif
+}
+
+static void wrap_scanvideo_end_scanline_generation(struct scanvideo_scanline_buffer *scanline_buffer) {
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+    if (current_scanline_shifted) {
+        for(scanvideo_scanline_buffer_t *buf = scanline_buffer; buf; buf = buf->link) {
+            buf->data -= 3;
+            buf->data_max += 3;
+            buf->data_used += 3;
+#ifdef DISPLAY_MENU
+            buf->data2 -= 3;
+            buf->data2_max += 3;
+            buf->data2_used += 3;
+#endif
+        }
+    }
+#endif
+#if PIXELATED_PAUSE
+    if (display_pps == PPS_SETUP_FRAME) {
+        if (check_pps_line_number(pps_line_number/2) && (pps_line_number & 1u)) {
+            pps_bitmap_line = pps_bitmap + (pps_line_number/2) * 80;
+            pps_line_valid[pps_line_number/2] = pps_line_valid[pps_line_number/2] * 2 + 2;
+            assert(((intptr_t)(pps_bitmap_line + 80))-((intptr_t)(pps_work_area)) < sizeof(mode7_pixels));
+            for(uint i=0;i<80;i++) {
+                uint pixel = (pps_work_area[i*2] >> 1u) & PP_MASK_1;
+                pixel |= (pps_work_area[i*2+1] >> 1u) & PP_MASK_2;
+                pps_bitmap_line[i] = pixel;
+            }
+        }
+    }
+#endif
+#if !X_GUI
+    scanvideo_end_scanline_generation(scanline_buffer);
+#else
+    scanline_buffer->half_line = pos_tracking.had_half_line;
+    x_gui_end_scanline(scanline_buffer);
+#endif
+}
+
 static void blank_scanline(enum debug_scanline_type type) {
 #if !X_GUI
     uint32_t *p = scanline_buffer->data;
 #ifndef DEBUG_SCANLINES
     uint16_t *buf16 = (uint16_t *)p;
     int pixels = draw_menu_background(buf16+2, scanvideo_scanline_number(scanline_buffer->scanline_id), 0);
+#ifdef ENABLE_BORDER
     if (border_counter && !pixels) { // note !pixels for simplicity
         int sl = scanvideo_scanline_number(scanline_buffer->scanline_id);
         uint32_t color = current_border_color();
@@ -1663,7 +1725,9 @@ static void blank_scanline(enum debug_scanline_type type) {
             px[8] = COMPOSABLE_EOL_SKIP_ALIGN;
             scanline_buffer->data_used = 5;
         }
-    } else {
+    } else
+#endif
+    {
         if (pixels) {
             p[0] = COMPOSABLE_RAW_RUN;
             scanline_buffer->data_used = do_end_of_scanline(buf16, pixels);
@@ -1718,18 +1782,14 @@ static void setup_video() {
     menu_init();
 #if PICO_ON_DEVICE
     masked_run_aligned_cmd = pio_add_program(pio0, &masked_run_aligned_program);
-#if MODE_1080p
-    // need to stretch the menu much wider
-    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay1] =
-            pio_encode_delay(8) | masked_run_aligned_program.instructions[masked_run_aligned_offset_delay1];
-    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay2] =
-            pio_encode_delay(8) | masked_run_aligned_program.instructions[masked_run_aligned_offset_delay2];
-#endif
 #elif !X_GUI
     masked_run_aligned_cmd = 22;
     void simulate_composable_masked_run_aligned(const uint16_t **dma_data, uint16_t **pixels, int32_t max_pixels, bool overlay);
     scanvideo_set_simulate_composable_cmd(masked_run_aligned_cmd, simulate_composable_masked_run_aligned);
 #endif
+#endif
+#if defined(MODE_1080p) && !defined(WIDESCREEN_OPTION)
+    update_widescreen();
 #endif
 
 #if !X_GUI
@@ -1891,8 +1951,9 @@ static_if_display_wire void __time_critical_func(effect_vsync_pos)(int interline
     DEBUG_PINS_XOR(scanline, 2);
     cmd_trace("%d: VSYNC_POS: il=%d ill=%d\n", pos_tracking.lines_since_vsync_pos, interline, interlline);
 
-
+#ifdef ENABLE_BORDER
     if (border_counter) border_counter--;
+#endif
 #if DISPLAY_MENU
     menu_display_blanking();
 #endif
@@ -1929,7 +1990,7 @@ static_if_display_wire void __time_critical_func(effect_vsync_pos)(int interline
         default:
             if (pixelated_pause) {
                 display_pps = PPS_SETUP_FRAME;
-                memset(pps_line_valid, 0, 128);
+                memset(pps_line_valid, 0, PPS_VALID_LINE_COUNT);
                 int total = 0;
                 for(int i=0;i<7;i++) {
                     total += grey_pixels[i];
@@ -1952,6 +2013,13 @@ static_if_display_wire void __time_critical_func(effect_vsync_pos)(int interline
     frame_skip_count = next_frame_skip_count;
     reflect_frame_skip_count(frame_skip_count);
 #endif
+#endif
+#if defined(MODE_1080p) && defined(WIDESCREEN_OPTION)
+    if (next_widescreen != widescreen) {
+        widescreen = next_widescreen;
+        reflect_widescreen(widescreen);
+        update_widescreen();
+    }
 #endif
     vtotal_displayed = vtotal = 0;
 
@@ -2165,7 +2233,7 @@ static_if_display_wire void __time_critical_func(effect_row_start)(int vdispen, 
     }
 }
 
-#if !X_GUI
+#ifdef ENABLE_BORDER
 static int16_t add_border( uint16_t *buf16, int16_t pixels) {
     if (border_counter) {
         if (pixels < 640) {
@@ -2223,7 +2291,17 @@ void __time_critical_func(effect_row_end)(int hc, bool full_line) {
 #if !X_GUI
                 uint16_t *buf16 = (uint16_t *) scanline_buffer->data;
                 if (pixels > 640) pixels = 640;
+#if PIXELATED_PAUSE
+                if (display_pps == PPS_SETUP_FRAME) {
+                    // do black out here rather than in rendering (which is too slow in mode 7)
+                    // todo note right now we are still drawing black in graphics modes since I'm seeing
+                    //  some colored lines still
+                    pixels = 0;
+                }
+#endif
+#ifdef ENABLE_BORDER
                 pixels = add_border(buf16 + 2, pixels);
+#endif
                 buf16[0] = COMPOSABLE_RAW_RUN;
 #if DISPLAY_MENU
                 pixels = draw_menu_background(buf16 + 2, scanvideo_scanline_number(scanline_buffer->scanline_id), pixels);
@@ -2250,7 +2328,9 @@ void __time_critical_func(effect_row_end)(int hc, bool full_line) {
 #endif
 
                         uint16_t *buf16_2 = (uint16_t *) scanline_buffer->link->data;
+#ifdef ENABLE_BORDER
                         add_border(buf16_2 + 2, pixels);
+#endif
                         buf16_2[0] = COMPOSABLE_RAW_RUN;
 #if DISPLAY_MENU
                         pixels = draw_menu_background(buf16_2 + 2, scanvideo_scanline_number(scanline_buffer->scanline_id), pixels);
@@ -2579,7 +2659,7 @@ void pps_frame() {
 //        if (!(sl_num & 1)) {
         int pixels;
         uint32_t *wa = (uint32_t *) (buf16 + 2);
-        if (pps_line_valid[sl_num/2] == 4) { // 1 *2 + 2 .. means we had things in the right order
+        if (check_pps_line_number(sl_num/2) && pps_line_valid[sl_num/2] == 4) { // 1 *2 + 2 .. means we had things in the right order
             pps_bitmap_line = pps_bitmap + (sl_num / 2) * 80;
             for (uint i = 0; i < 80; i++) {
                 uint32_t pixel = pps_bitmap_line[i];
@@ -2617,4 +2697,43 @@ uint do_end_of_scanline(uint16_t *buf16, int pixels) {
     assert(!(used & 1));
     return used >> 1;
 }
+#endif
+
+#ifdef MODE_1080p
+#ifdef WIDESCREEN_OPTION
+void set_widescreen(bool _widescreen) {
+    next_widescreen = _widescreen;
+}
+extern bool video_24mhz_composable_adapt_for_mode(const scanvideo_pio_program_t *program, const scanvideo_mode_t *mode,
+                                                  scanvideo_scanline_buffer_t *missing_scanline_buffer,
+                                                  uint16_t *modifiable_instructions);
+
+#endif
+
+void update_widescreen() {
+    uint menu_delay = widescreen ? 8 : 4;
+    // stretch the menu overlay code
+    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay1] =
+            pio_encode_delay(menu_delay) |
+            masked_run_aligned_program.instructions[masked_run_aligned_offset_delay1];
+    pio0->instr_mem[masked_run_aligned_cmd + masked_run_aligned_offset_delay2] =
+            pio_encode_delay(menu_delay) |
+            masked_run_aligned_program.instructions[masked_run_aligned_offset_delay2];
+
+#ifdef WIDESCREEN_OPTION
+    // huge hack for now, using internals of video, since there is no mode update method
+    const scanvideo_pio_program_t *program = vga_mode.pio_program;
+    scanvideo_scanline_buffer_t dummy_buffer;
+    uint length = program->program->length;
+    uint16_t new_program[length];
+    memcpy(new_program, program->program->instructions, length * 2);
+    video_24mhz_composable_adapt_for_mode(program, widescreen ? &vga_mode_640x270_50_bem_1080p : &vga_mode_640x270_50_bem_1080p_non_widescreen,
+                                          &dummy_buffer, new_program);
+    // we assume loaded at 0
+    for(uint i=0;i<length;i++) {
+        pio0->instr_mem[i] = new_program[i];
+    }
+#endif
+}
+
 #endif

@@ -48,7 +48,7 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
     if (DEFINED ${OVERRIDE_ROM_FILE})
         set(ROM_FILE ${OVERRIDE_ROM_FILE})
     endif()
-    message("{$NAME} DISCS=${DISC_FILE} ROMS=${ROM_FILE}")
+    message("${NAME} DISCS=${DISC_FILE} ROMS=${ROM_FILE}")
     configure_b_em_exe(${NAME}
             VERSION 2.2?-${VER}
             TUBE 0
@@ -70,7 +70,6 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
         )
     endif()
     if (FLAGS_1080p)
-        message("WEEVAL ${NAME}")
         target_compile_definitions(${NAME} PRIVATE
                 MODE_1080p
                 WIDESCREEN_OPTION
@@ -80,7 +79,6 @@ function(add_spock_exe NAME GUI VER DISC_FILE ROM_FILE)
                 MODE_1280
                 )
     endif()
-
 
     pico_add_extra_outputs(${NAME})
     target_link_libraries(${NAME} PRIVATE spock_common ${GUI})
@@ -323,6 +321,10 @@ if (TARGET beeb_1080p)
 endif()
 
 if (PICO_ON_DEVICE)
+    # Issue with SDK1.2.0
+    if (NOT PICO_DEFAULT_BOOT_STAGE2_FILE)
+        set(PICO_DEFAULT_BOOT_STAGE2_FILE "${PICO_SDK_PATH}/src/rp2_common/boot_stage2/compile_time_choice.S")
+    endif()
     pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
     target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
 endif()

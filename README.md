@@ -72,11 +72,11 @@ You would add `-DUSE_USB_KEYBOARD` to use USB keyboard, but as I say this is cur
 
 ## Pi Version
 
-Right now only 32-bit OS is worth building for (you can make it build on 64 bit if you remove the check but it currently doesn't run as well as you'd expect/hope due to video driver issues amongst other things, which is why I disallowed it by default).
+Right now only 32-bit OS is (probably) suitable for anything other than Pi 5; i say probably, becaus I haven't tried it recently, and a lot of the issues were with the graphics driver. The other issue is that the ARM thumb assembly (shared with the Pico version) doesn't compile for 64 bit, so you end up using the slower C version, but this shouldn't matter too much on anything except the very old Pi models.
 
-You should be on the latest Raspberry Pi OS with latest updates. Frankly, for your first attempt I recommend starting with a fresh SD card install. 
+For most predictable results, You should be on the latest Raspberry Pi OS with latest updates. 
 
-YOU MUST NOT BE USING THE LEGACY VIDEO DRIVER. ALSO I RECOMMEND DISABLING THE COMPOSITOR (both of these are in 6. Advanced in `raspi-config`, and make sure to reboot after).
+As of right now, there seems to be some tearing under X, so Wayland is better. With previous Raspberry Pi OS versions, you wanted to disable desktop compositing (check previous versions of this README for suggestions).
 
 You need the Pico SDK: https://github.com/raspberrypi/pico-sdk as this is nominally still a "Pico" build
 You need the Pico Extras: https://github.com/raspberrypi/pico-extras (put it next to your pico-sdk directory)

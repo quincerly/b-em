@@ -3,6 +3,7 @@
  */
 #include <cstring>
 #include <algorithm>
+#include <limits>
 #include "font.h"
 #include "font_data.h"
 

@@ -6,8 +6,9 @@
 #include <cstring>
 #include <cstdlib>
 #include <string>
+#include <X11/X.h>
+#include <X11/Xlib.h>
 #include "egl_texture.h"
-
 
 std::map<int, std::shared_ptr<egl_texture_manager>> egl_texture_manager::managers;
 

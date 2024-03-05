@@ -157,8 +157,8 @@ public:
         }
 //        printf("offset %llx\n", mreq.offset);
         tex->buffer = mmap(0, tex->dbuf_size, PROT_READ | PROT_WRITE, MAP_SHARED, drm_fd, mreq.offset);
-        if (!tex->buffer) {
-            printf("Failed to map buffer\n");
+        if (tex->buffer == MAP_FAILED) {
+            printf("Failed to map buffer %d\n", errno);
             return -1;
         }
 

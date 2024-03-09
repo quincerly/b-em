@@ -153,6 +153,7 @@ if (PICO_NO_HARDWARE)
         target_compile_definitions(x_gui INTERFACE
                 ENABLE_FRAME_SKIP=1
                 FORCE_44100_OUTPUT=1
+                _FILE_OFFSET_BITS=64
                 PI_BUILD=1) # not strictly PI really
 
         include(ProcessorCount)
